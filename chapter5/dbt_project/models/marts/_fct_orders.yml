@@ -1,0 +1,118 @@
+version: 2
+models:
+  - name: fct_orders
+    description: 注文分析用ファクトマート（fct_）。1 行 = 1 注文の金額・状態・支払い・明細サマリ。
+    config:
+      contract:
+        enforced: true
+        alias_types: false
+    columns:
+      - name: order_id
+        description: 注文ID
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: customer_id
+        description: 顧客ID
+        data_type: bigint
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: customer_name
+        description: 顧客名（顧客マスタとの left join なので NULL 可）
+        data_type: varchar
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: order_date
+        description: 注文日
+        data_type: date
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: date
+      - name: order_status
+        description: 注文ステータス
+        data_type: varchar
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: total_amount
+        description: 合計金額
+        data_type: numeric(12, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: shipping_fee
+        description: 送料
+        data_type: numeric(8, 2)
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: tax_amount
+        description: 税額
+        data_type: numeric(10, 2)
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: payment_status
+        description: 支払ステータス（payment の集計結果。支払い未登録の場合は 'pending'）
+        data_type: varchar
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: payment_method
+        description: 支払方法（最新の支払い方法）
+        data_type: varchar
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: item_count
+        description: 商品点数（order_details の行数）
+        data_type: bigint
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: total_quantity
+        description: 総数量（order_details の quantity 合計）
+        data_type: bigint
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: payment_date
+        description: 最新の支払い日
+        data_type: date
+        config:
+          meta:
+            dimension:
+              type: date

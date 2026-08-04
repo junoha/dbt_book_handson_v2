@@ -1,0 +1,45 @@
+chartConfig:
+  config:
+    groupColorOverrides: {}
+    groupFieldIds:
+      - dim_products_category_name
+    groupLabelOverrides: {}
+    groupSortOverrides: []
+    groupValueOptionOverrides: {}
+    isDonut: true
+    legendMaxItemLength: 30
+    legendPosition: vertical
+    metricId: dim_products_sum_total_profit
+    showLegend: true
+    showPercentage: true
+    showValue: true
+    valueLabel: inside
+  type: pie
+contentType: chart
+description: ""
+metricQuery:
+  additionalMetrics: []
+  customDimensions: []
+  dimensionOverrides: {}
+  dimensions:
+    - dim_products_category_name
+  exploreName: dim_products
+  filters: {}
+  limit: 500
+  metricOverrides: {}
+  metrics:
+    - dim_products_sum_total_profit
+  sorts:
+    - descending: false
+      fieldId: dim_products_category_name
+  tableCalculations: []
+name: カテゴリ別総利益
+slug: iotn4
+spaceSlug: shared
+tableConfig:
+  columnOrder:
+    - dim_products_category_name
+    - dim_products_sum_total_profit
+tableName: dim_products
+verification: null
+version: 1

@@ -1,0 +1,30 @@
+jaffle_shop:
+  target: dev
+  outputs:
+    dev:
+      type: athena
+      region_name: ap-northeast-1
+      database: awsdatacatalog
+      schema: jaffle_shop_ch3_dev
+      s3_staging_dir: "s3://{{ env_var('S3_BUCKET_ATHENA') }}/staging/"
+      work_group: dbt-book-ch3-athena-workgroup
+      num_retries: 0
+      threads: 4
+    ci:
+      type: athena
+      region_name: ap-northeast-1
+      database: awsdatacatalog
+      schema: jaffle_shop_ch3_ci
+      s3_staging_dir: "s3://{{ env_var('S3_BUCKET_ATHENA') }}/staging/"
+      work_group: dbt-book-ch3-athena-workgroup
+      num_retries: 1
+      threads: 4
+    prod:
+      type: athena
+      region_name: ap-northeast-1
+      database: awsdatacatalog
+      schema: jaffle_shop_ch3
+      s3_staging_dir: "s3://{{ env_var('S3_BUCKET_ATHENA') }}/staging/"
+      work_group: dbt-book-ch3-athena-workgroup
+      num_retries: 1
+      threads: 4

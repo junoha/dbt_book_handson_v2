@@ -1,0 +1,69 @@
+config:
+  dateZoomGranularities:
+    - Day
+    - Week
+    - Month
+    - Quarter
+    - Year
+  isAddFilterDisabled: false
+  isDateZoomDisabled: false
+  pinnedParameters: []
+contentType: dashboard
+description: dbt book demo dashboard
+filters:
+  dimensions: []
+  metrics: []
+  tableCalculations: []
+name: dbt book demo dashboard
+parameters: {}
+slug: dbt-book-demo-dashboard
+spaceSlug: shared
+tabs: []
+tiles:
+  - h: 8
+    properties:
+      chartName: カテゴリ別総利益
+      chartSlug: iotn4
+      hideTitle: false
+      title: ""
+    tabUuid: null
+    tileSlug: iotn4
+    type: saved_chart
+    w: 18
+    x: 0
+    "y": 0
+  - h: 8
+    properties:
+      chartName: 顧客生涯価値
+      chartSlug: sh1b6
+      hideTitle: false
+      title: ""
+    tabUuid: null
+    tileSlug: sh1b6
+    type: saved_chart
+    w: 18
+    x: 18
+    "y": 0
+  - h: 1
+    properties:
+      showDivider: false
+      text: Quality
+    tabUuid: null
+    type: heading
+    w: 36
+    x: 0
+    "y": 8
+  - h: 5
+    properties:
+      chartName: Quality Dashboard
+      chartSlug: quality-dashboard
+      hideTitle: false
+      title: ""
+    tabUuid: null
+    tileSlug: quality-dashboard
+    type: saved_chart
+    w: 36
+    x: 0
+    "y": 9
+verification: null
+version: 1

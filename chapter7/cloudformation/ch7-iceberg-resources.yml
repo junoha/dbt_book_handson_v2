@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Chapter 6 - Lakehouse Resources for dbt-athena and dbt-glue'
+
+Resources:
+  IcebergS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'dbt-book-ch7-iceberg-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: dbt-book-ch7-iceberg-workgroup
+      RecursiveDeleteOption: true
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub 's3://${IcebergS3Bucket}/athena-results/'
+        EnforceWorkGroupConfiguration: true
+        EngineVersion:
+          SelectedEngineVersion: AUTO
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: jaffle_shop_iceberg
+        Description: 'Glue Database for Iceberg tables - Chapter 7 dbt book'
+        CreateTableDefaultPermissions:
+          - Principal:
+              DataLakePrincipalIdentifier: 'IAM_ALLOWED_PRINCIPALS'
+            Permissions:
+              - ALL
+
+  GlueServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: dbt-book-ch7-glue-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GlueInteractiveSessionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${IcebergS3Bucket}'
+                  - !Sub 'arn:aws:s3:::${IcebergS3Bucket}/*'
+              - Effect: Allow
+                Action:
+                  - glue:*Database*
+                  - glue:*Table*
+                  - glue:*Partition*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - lakeformation:GetDataAccess
+                Resource: '*'
+
+Outputs:
+  S3BucketName:
+    Value: !Ref IcebergS3Bucket
+  WorkGroupName:
+    Value: !Ref AthenaWorkGroup
+  GlueDatabaseName:
+    Value: !Ref GlueDatabase
+  GlueRoleArn:
+    Description: ARN of the Glue IAM Role
+    Value: !GetAtt GlueServiceRole.Arn

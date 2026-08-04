@@ -1,0 +1,8 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: 顧客マスタのステージング。
+
+  - name: stg_orders
+    description: 注文データのステージング。列名・型変換のみ。

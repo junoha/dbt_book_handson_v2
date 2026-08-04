@@ -1,0 +1,135 @@
+version: 2
+
+# dbt Exposures: データリネージュとBI連携の可視化
+# BIツールやアプリケーションがdbtモデルをどう利用しているかを追跡
+
+exposures:
+  # 1. 経営ダッシュボード
+  - name: executive_dashboard
+    label: "経営ダッシュボード"
+    type: dashboard
+    maturity: high
+    url: https://bi.zakkamall.example.com/dashboards/executive
+    description: |
+      経営層向けの統合KPIダッシュボード。
+      売上、顧客数、商品販売動向などの主要指標を可視化。
+
+    # ダミーで定義（実運用では BI ツール側のクエリから機械的に算出する）
+    depends_on:
+      - ref("dim_customers")
+      - ref("dim_products")
+
+    owner:
+      name: "経営企画チーム"
+      email: executive@zakkamall.example.com
+
+    config:
+      meta:
+        business_impact: critical
+        refresh_schedule: daily
+        stakeholders:
+          - CEO
+          - CFO
+          - COO
+
+  # 2. マーケティング分析ダッシュボード
+  - name: marketing_dashboard
+    label: "マーケティング分析ダッシュボード"
+    type: dashboard
+    maturity: high
+    url: https://bi.zakkamall.example.com/dashboards/marketing
+    description: |
+      マーケティングチーム向けの顧客分析ダッシュボード。
+      顧客セグメント、購買パターン、LTV分析などを提供。
+
+    # ダミーで定義
+    depends_on:
+      - ref("dim_customers")
+
+    owner:
+      name: "マーケティングチーム"
+      email: marketing@zakkamall.example.com
+
+    config:
+      meta:
+        business_impact: high
+        refresh_schedule: daily
+        stakeholders:
+          - マーケティング部長
+          - データアナリスト
+
+  # 3. 商品分析アプリケーション
+  - name: product_analytics_app
+    label: "商品分析アプリケーション"
+    type: application
+    maturity: medium
+    url: https://analytics.zakkamall.example.com/products
+    description: |
+      商品企画チーム向けの商品パフォーマンス分析アプリ。
+      商品別売上、在庫回転率、利益率などをリアルタイム分析。
+
+    # ダミーで定義
+    depends_on:
+      - ref("dim_products")
+      - ref("fct_orders")
+
+    owner:
+      name: "商品企画チーム"
+      email: product@zakkamall.example.com
+
+    config:
+      meta:
+        business_impact: medium
+        refresh_schedule: hourly
+        api_endpoint: https://api.zakkamall.example.com/v1/products/analytics
+  - name: data_quality_dashboard
+    label: "データ品質監視ダッシュボード"
+    type: dashboard
+    maturity: medium
+    url: https://bi.zakkamall.example.com/dashboards/quality
+    description: |
+      データエンジニアリングチーム向けの品質監視ダッシュボード。
+      データ鮮度、完全性、異常検知結果などを可視化。
+
+    # ダミーで定義
+    depends_on:
+      - ref("quality_dashboard")
+      - ref("quality_assessment")
+      - ref("business_impact_matrix")
+
+    owner:
+      name: "データエンジニアリングチーム"
+      email: data-eng@zakkamall.example.com
+
+    config:
+      meta:
+        business_impact: high
+        refresh_schedule: continuous
+        alert_channel: "#data-quality-alerts"
+  - name: monthly_financial_report
+    label: "月次財務レポート"
+    type: notebook
+    maturity: high
+    url: https://jupyter.zakkamall.example.com/notebooks/monthly_financial
+    description: |
+      経理部向けの月次財務分析ノートブック。
+      売上集計、コスト分析、利益率計算などを自動化。
+
+    # ダミーで定義
+    depends_on:
+      - ref("dim_customers")
+      - ref("dim_products")
+
+    owner:
+      name: "経理部"
+      email: accounting@zakkamall.example.com
+
+    config:
+      meta:
+        business_impact: critical
+        refresh_schedule: monthly
+        regulatory_requirement: true
+        stakeholders:
+          - CFO
+          - 経理部長
+          - 外部監査法人

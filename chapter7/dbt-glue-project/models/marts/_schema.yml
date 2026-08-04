@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: rfm_input
+    description: RFM分析のための薄い中間モデル。dbt-loom経由で引いた`stg_orders`からRFMに必要な列だけを選ぶ。Icebergテーブルとして`glue_catalog.jaffle_shop_iceberg.rfm_input`に書き出す。
+
+  - name: customer_rfm
+    description: |
+      顧客のRFM分析モデル。Spark SQL の `ntile` ウィンドウ関数を使って、
+      顧客をRecency（最終購入日）、Frequency（購入頻度）、Monetary（購入金額）
+      の3軸でスコアリングする。
+    columns:
+      - name: customer_id
+        description: 顧客ID
+        tests:
+          - unique
+          - not_null
+      - name: recency
+        description: 最終購入からの日数
+      - name: frequency
+        description: 購入回数
+      - name: monetary
+        description: 合計購入金額
+      - name: r_score
+        description: Recencyスコア（1-5、5が最近）
+      - name: f_score
+        description: Frequencyスコア（1-5、5が高頻度）
+      - name: m_score
+        description: Monetaryスコア（1-5、5が高額）

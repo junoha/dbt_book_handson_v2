@@ -1,0 +1,248 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "dbt実践入門 第2章 - Redshift Serverless"
+
+# =====================================================================
+# 用途:
+#   第2章のハンズオンで使用する Redshift Serverless 環境を構築する。
+#   dbt-redshift adapter (method: iam) からローカル PC のデフォルトの
+#   AWS プロファイル (ハンズオン共通のセットアップで aws login 済み) で接続する前提の最小構成。
+#
+# このスタックが作成するもの:
+#   - VPC / 2 パブリックサブネット / IGW / パブリックルートテーブル
+#   - Redshift Serverless Namespace + Workgroup (PubliclyAccessible: true)
+#   - 5439 ポートを AllowedCidrIp からのみ許可するセキュリティグループ
+#   - Redshift 管理者パスワード (Secrets Manager 自動生成、Namespace 作成のために必須)
+#   - landing データ用 S3 バケット
+#       (Jaffle Shop のサンプル CSV をアップロードし、Redshift COPY コマンドでロードする)
+#   - Redshift から S3 を読むための IAM ロール (Namespace に紐付け)
+#
+# 注意:
+#   - ハンズオン用構成のため、Workgroup を PubliclyAccessible: true にしている。
+#     本番では VPC 内に閉じる構成を推奨。
+#   - IAM 認証はローカルの AWS プロファイル (admin 権限) をそのまま利用する想定。
+#     ハンズオン共通のセットアップで説明したとおり、本書のハンズオンは管理者権限前提で進める。
+# =====================================================================
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: "dbt-book-ch2"
+    Description: "プロジェクト名 (リソース名のプレフィックス)"
+    AllowedPattern: "^[a-z][a-z0-9-]{2,30}[a-z0-9]$"
+    ConstraintDescription: "英小文字始まり、英数字とハイフンのみ、4-32文字"
+
+  AllowedCidrIp:
+    Type: String
+    Description: "Redshift Serverless (5439) へのアクセスを許可するCIDR (例: 203.0.113.10/32)"
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[1-2]?[0-9])$'
+    ConstraintDescription: "有効な CIDR 形式 (例: 203.0.113.10/32)"
+
+Resources:
+  # =====================================================
+  # ネットワーク
+  # =====================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-vpc"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-igw"
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-subnet-1"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-subnet-2"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-public-rt"
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # =====================================================
+  # セキュリティグループ
+  # =====================================================
+  RedshiftSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Redshift Serverless (test) - IP-restricted"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5439
+          ToPort: 5439
+          CidrIp: !Ref AllowedCidrIp
+          Description: "Redshift access from local PC"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-redshift-sg"
+
+  # =====================================================
+  # landing バケット (Jaffle Shop のサンプル CSV を Redshift COPY で取り込むための一時置き場)
+  # =====================================================
+  LandingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-landing-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # =====================================================
+  # Redshift から S3 を読むための IAM ロール
+  # =====================================================
+  RedshiftS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-redshift-s3-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: redshift.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadFromLandingBucket
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                Resource:
+                  - !GetAtt LandingBucket.Arn
+                  - !Sub "${LandingBucket.Arn}/*"
+
+  # =====================================================
+  # Redshift Serverless 管理者パスワード (Namespace作成に必須、IAM認証ハンズオンでは不使用)
+  # =====================================================
+  RedshiftAdminSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}-redshift-admin"
+      Description: "Redshift Serverless admin password (required for namespace creation; IAM auth is the primary path)"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  # =====================================================
+  # Redshift Serverless
+  # =====================================================
+  RedshiftNamespace:
+    Type: AWS::RedshiftServerless::Namespace
+    Properties:
+      NamespaceName: !Sub "${ProjectName}-ns"
+      AdminUsername: admin
+      AdminUserPassword: !Sub "{{resolve:secretsmanager:${RedshiftAdminSecret}:SecretString:password}}"
+      DbName: dev
+      IamRoles:
+        - !GetAtt RedshiftS3Role.Arn
+      DefaultIamRoleArn: !GetAtt RedshiftS3Role.Arn
+
+  RedshiftWorkgroup:
+    Type: AWS::RedshiftServerless::Workgroup
+    Properties:
+      WorkgroupName: !Sub "${ProjectName}-wg"
+      NamespaceName: !Ref RedshiftNamespace
+      BaseCapacity: 4
+      MaxCapacity: 4
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroupIds:
+        - !Ref RedshiftSecurityGroup
+      PubliclyAccessible: true
+
+Outputs:
+  RedshiftWorkgroupName:
+    Description: "Redshift Serverless Workgroup Name"
+    Value: !Ref RedshiftWorkgroup
+
+  RedshiftWorkgroupArn:
+    Description: "Redshift Serverless Workgroup ARN"
+    Value: !GetAtt RedshiftWorkgroup.Workgroup.WorkgroupArn
+
+  RedshiftEndpoint:
+    Description: "Redshift Serverless Endpoint hostname"
+    Value: !GetAtt RedshiftWorkgroup.Workgroup.Endpoint.Address
+
+  RedshiftDatabaseName:
+    Description: "Redshift Database Name"
+    Value: dev
+
+  RedshiftS3RoleArn:
+    Description: "IAM Role ARN attached to Redshift Namespace (used by COPY commands to read from S3)"
+    Value: !GetAtt RedshiftS3Role.Arn
+
+  LandingBucketName:
+    Description: "S3 bucket name for the landing zone (used as a staging area for COPY commands)"
+    Value: !Ref LandingBucket
+
+  RedshiftAdminPasswordSecretArn:
+    Description: "Secrets Manager ARN for Redshift admin password (rarely needed; admin login is for initial setup only)"
+    Value: !Ref RedshiftAdminSecret

@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: customer_analysis
+    description: |
+      ### Grain
+      1 row per customer_id（SCD Type 2 の全期間を集約した顧客単位、最新バージョンの属性で表示）
+
+      ### Business process
+      顧客セグメンテーションのためのマーケティング分析マート。
+      dim_customers×fct_orders×fct_order_items を顧客単位に集計し、
+      RFM（Recency / Frequency / Monetary）分析によるスコア付けと
+      顧客セグメント・顧客価値の分類を行う。
+
+      ### 主要 KPI
+      - RFM スコア（各 1-5 の 3 桁コード）
+      - 顧客セグメント: Champions / Loyal Customers / New Customers /
+        At Risk / Lost Customers / Potential Loyalists
+      - 顧客価値: High Value / Medium Value / Low Value
+    columns:
+      - name: customer_id
+        description: "顧客業務キー（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_name
+        description: "顧客名"
+      - name: email
+        description: "メールアドレス"
+      - name: region
+        description: "地域区分"
+      - name: first_order_date
+        description: "初回注文日"
+      - name: last_order_date
+        description: "最終注文日"
+      - name: days_since_last_order
+        description: "最終注文からの経過日数"
+      - name: total_orders
+        description: "総注文件数"
+      - name: total_spent
+        description: "総購入金額"
+      - name: avg_order_value
+        description: "平均注文金額"
+      - name: recency_score
+        description: "Recency スコア（1-5、5 が最近の注文）"
+      - name: frequency_score
+        description: "Frequency スコア（1-5、5 が最高頻度）"
+      - name: monetary_score
+        description: "Monetary スコア（1-5、5 が最高額）"
+      - name: rfm_score
+        description: "RFM スコアの 3 桁コード（例: 555 = 最優良顧客）"
+      - name: customer_segment
+        description: "顧客セグメント（Champions / Loyal Customers / New Customers / At Risk / Lost Customers / Potential Loyalists）"
+      - name: customer_value_segment
+        description: "顧客価値セグメント（High Value / Medium Value / Low Value）"

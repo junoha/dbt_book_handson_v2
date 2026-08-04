@@ -1,0 +1,13 @@
+# jafgen output
+jaffle-data/
+
+# uv virtualenv
+.venv/
+
+# dbt target dirs
+dbt-athena-project/target/
+dbt-athena-project/dbt_packages/
+dbt-athena-project/logs/
+dbt-glue-project/target/
+dbt-glue-project/dbt_packages/
+dbt-glue-project/logs/

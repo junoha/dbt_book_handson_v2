@@ -1,0 +1,145 @@
+version: 2
+
+models:
+  - name: customers
+    description: |
+      - **目的**: 顧客 1 人当たりのライフタイム購買指標を提供するマート。マーケティングのセグメント分析に使用する。
+      - **粒度**: 1 行 1 顧客 (customer_id で一意)
+      - **更新**: テーブルマテリアライゼーション。日次バッチで全置換を想定。
+      - **オーナー**: dbt book team (dbt-book-team@example.com)
+    columns:
+      - name: customer_id
+        description: '{{ doc("customer_id") }}'
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_name
+        description: '{{ doc("column__customer_name") }}'
+        config:
+          meta:
+            contains_pii: true
+      - name: count_lifetime_orders
+        description: |
+          - **意味**: 顧客の通算注文回数を保持する。
+          - **単位**: 件
+          - **NULL 許容**: 未注文顧客では NULL (左結合の結果)
+      - name: first_ordered_at
+        description: |
+          - **意味**: 顧客の初回注文日時を保持する。
+          - **単位**: UTC のタイムスタンプ
+          - **NULL 許容**: 未注文顧客では NULL
+      - name: last_ordered_at
+        description: |
+          - **意味**: 顧客の直近注文日時を保持する。
+          - **単位**: UTC のタイムスタンプ
+          - **NULL 許容**: 未注文顧客では NULL
+      - name: lifetime_spend_pretax
+        description: |
+          - **意味**: 顧客の税抜生涯消費額。全注文の subtotal 合計。
+          - **単位**: 円 (整数)
+          - **NULL 許容**: 未注文顧客では NULL
+      - name: lifetime_tax_paid
+        description: |
+          - **意味**: 顧客の生涯消費税負担額。全注文の tax_paid 合計。
+          - **単位**: 円 (整数)
+          - **NULL 許容**: 未注文顧客では NULL
+      - name: lifetime_spend
+        description: |
+          - **意味**: 顧客の税込生涯消費額。全注文の order_total 合計。
+          - **単位**: 円 (整数)
+          - **NULL 許容**: 未注文顧客では NULL
+      - name: customer_type
+        description: |
+          - **意味**: 顧客分類。2 回以上注文した顧客は 'returning'、1 回以下 (未注文を含む) は 'new'。
+          - **許容値**: 'new' | 'returning'
+        data_tests:
+          - name: accepted_values_customers_customer_type
+            test_name: accepted_values
+            arguments:
+              values:
+                - new
+                - returning
+
+  - name: orders
+    description: |
+      - **目的**: 注文 1 件ごとのファクトマート。注文合計とフード/ドリンク/明細数の集計を保持する。
+      - **粒度**: 1 行 1 注文 (order_id で一意)
+      - **更新**: テーブルマテリアライゼーション。日次バッチで全置換を想定。
+      - **オーナー**: dbt book team (dbt-book-team@example.com)
+      - **備考**: 明細が 1 行も存在しない注文では food/drink 系カラムが NULL になりうる。
+    columns:
+      - name: order_id
+        description: '{{ doc("order_id") }}'
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: '{{ doc("customer_id") }}'
+      - name: location_id
+        description: '{{ doc("column__location_id") }}'
+      - name: ordered_at
+        description: '{{ doc("ordered_at") }}'
+      - name: subtotal
+        description: '{{ doc("column__subtotal") }}'
+      - name: tax_paid
+        description: '{{ doc("column__tax_paid") }}'
+      - name: order_total
+        description: '{{ doc("column__order_total") }}'
+      - name: order_items_subtotal
+        description: |
+          - **意味**: 注文明細 product_price の単純合計。
+          - **単位**: 円 (整数)
+          - **NULL 許容**: 明細が 1 行も存在しない注文では NULL
+          - **備考**: subtotal との差異はキャンペーン割引等の適用を示唆する。
+      - name: count_order_items
+        description: |
+          - **意味**: 注文に含まれる明細行数。
+          - **単位**: 件
+          - **NULL 許容**: 明細が 1 行も存在しない注文では NULL
+      - name: count_food_items
+        description: |
+          - **意味**: 注文に含まれるフード (jaffle) 明細の件数。
+          - **単位**: 件
+          - **NULL 許容**: 明細が 1 行も存在しない注文では NULL
+      - name: count_drink_items
+        description: |
+          - **意味**: 注文に含まれるドリンク (beverage) 明細の件数。
+          - **単位**: 件
+          - **NULL 許容**: 明細が 1 行も存在しない注文では NULL
+      - name: is_food_order
+        description: |
+          - **意味**: フードを 1 品以上含む注文フラグ。count_food_items > 0 と等価。
+          - **NULL 許容**: 明細が 1 行も存在しない注文では NULL
+      - name: is_drink_order
+        description: |
+          - **意味**: ドリンクを 1 品以上含む注文フラグ。count_drink_items > 0 と等価。
+          - **NULL 許容**: 明細が 1 行も存在しない注文では NULL
+      - name: customer_order_number
+        description: |
+          - **意味**: 顧客ごとの注文通番。初回注文を 1 とし、ordered_at 昇順で振られる。
+          - **NULL 許容**: 不可 (row_number により必ず採番される)
+          - **備考**: ordered_at に同秒のタイがあった場合の順序は不定。
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: test_orders_food_drink_booleans
+    model: orders
+    given:
+      - input: ref('stg_jaffle_shop__order_items')
+        rows:
+          - { order_item_id: "i1", order_id: "o1", product_id: "p_food" }
+          - { order_item_id: "i2", order_id: "o1", product_id: "p_drink" }
+          - { order_item_id: "i3", order_id: "o2", product_id: "p_food" }
+      - input: ref('stg_jaffle_shop__products')
+        rows:
+          - { product_id: "p_food", product_name: "Jaffle", product_type: "jaffle", product_description: "food", product_price: 1000, is_food_item: true, is_drink_item: false }
+          - { product_id: "p_drink", product_name: "Coffee", product_type: "beverage", product_description: "drink", product_price: 500, is_food_item: false, is_drink_item: true }
+      - input: ref('stg_jaffle_shop__orders')
+        rows:
+          - { order_id: "o1", customer_id: "c1", location_id: "s1", subtotal: 1500, tax_paid: 90, order_total: 1590, ordered_at: "2024-01-01 10:00:00" }
+          - { order_id: "o2", customer_id: "c1", location_id: "s1", subtotal: 1000, tax_paid: 60, order_total: 1060, ordered_at: "2024-01-02 10:00:00" }
+    expect:
+      rows:
+        - { order_id: "o1", count_order_items: 2, count_food_items: 1, count_drink_items: 1, order_items_subtotal: 1500, is_food_order: true, is_drink_order: true, customer_order_number: 1 }
+        - { order_id: "o2", count_order_items: 1, count_food_items: 1, count_drink_items: 0, order_items_subtotal: 1000, is_food_order: true, is_drink_order: false, customer_order_number: 2 }

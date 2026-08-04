@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: int_orders_with_payment_shipment
+    description: |
+      ### Grain
+      1 row per order_id（注文単位）
+
+      ### Business process
+      注文に対して 1 対多で発生する支払い・配送を注文単位に集約する。
+      分割決済・複数発送を想定しており、注文単位で「いずれかが成功／失敗したか」
+      を示すフラグと、配送リードタイムなどのオペレーション KPI を計算する。
+
+      ### 役割
+      Re-grain + 構造簡素化。下流の fct_orders と marts/operations/order_processing
+      が注文粒度の集計メジャーを直接参照できるようにする。
+    columns:
+      - name: order_id
+        description: "注文ID（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_id
+        description: "顧客ID"
+        data_tests:
+          - not_null
+      - name: order_number
+        description: "注文番号（業務キー）"
+      - name: order_date
+        description: "注文日"
+      - name: order_status
+        description: "注文ステータス"
+      - name: total_amount
+        description: "注文合計金額（ヘッダー）"
+      - name: payment_count
+        description: "支払い件数"
+      - name: total_paid_amount
+        description: "支払い完了金額合計"
+      - name: has_completed_payment
+        description: "支払いがいずれか完了しているか"
+      - name: has_failed_payment
+        description: "支払いがいずれか失敗しているか"
+      - name: has_refunded_payment
+        description: "支払いがいずれか返金されているか"
+      - name: primary_payment_method
+        description: "代表的な支払い方法（集約時の最初の方法）"
+      - name: shipment_count
+        description: "配送件数"
+      - name: earliest_shipped_date
+        description: "最早発送日"
+      - name: latest_delivery_date
+        description: "最新配送完了日"
+      - name: has_delivered_shipment
+        description: "配送がいずれか完了しているか"
+      - name: has_returned_shipment
+        description: "配送がいずれか返送されているか"
+      - name: has_delayed_shipment
+        description: "配送がいずれか遅延しているか"
+      - name: avg_delivery_lead_time_days
+        description: "平均配送リードタイム（発送から配送完了までの日数）"
+      - name: order_to_delivery_lead_time_days
+        description: "注文から配送完了までの日数"
+      - name: order_to_shipment_lead_time_days
+        description: "注文から発送までの日数"
+      - name: fulfillment_status
+        description: "総合フルフィルメントステータス（completed / delivered_without_payment / paid_not_shipped / payment_failed / returned / pending）"

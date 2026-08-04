@@ -1,0 +1,48 @@
+version: 2
+
+macros:
+  - name: calculate_completeness
+    description: "指定されたカラムの完全性（NULL値の割合）を計算し、品質評価を行う"
+    arguments:
+      - name: column_name
+        type: string
+        description: "評価対象のカラム名"
+      - name: table_name
+        type: string
+        description: "評価対象のテーブル名（ref()またはsource()を使用）"
+
+  - name: calculate_uniqueness
+    description: "指定されたカラムの一意性（重複レコードの検出）を計算し、品質評価を行う"
+    arguments:
+      - name: column_name
+        type: string
+        description: "評価対象のカラム名"
+      - name: table_name
+        type: string
+        description: "評価対象のテーブル名（ref()またはsource()を使用）"
+
+  - name: calculate_validity
+    description: "指定されたカラムの妥当性（値の範囲や形式）をチェックし、品質評価を行う"
+    arguments:
+      - name: column_name
+        type: string
+        description: "評価対象のカラム名"
+      - name: table_name
+        type: string
+        description: "評価対象のテーブル名（ref()またはsource()を使用）"
+      - name: validation_rule
+        type: string
+        description: "妥当性チェックのルール（SQL条件式）"
+
+  - name: calculate_consistency
+    description: "指定されたカラムのクロステーブル一貫性（参照整合性）を計算し、品質評価を行う"
+    arguments:
+      - name: column_name
+        type: string
+        description: "評価対象のカラム名"
+      - name: source_table
+        type: string
+        description: "参照元テーブル名（ref()またはsource()を使用）"
+      - name: target_table
+        type: string
+        description: "参照先テーブル名（ref()またはsource()を使用）"

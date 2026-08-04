@@ -1,0 +1,14 @@
+[sqlfluff]
+templater = dbt
+dialect = athena
+
+# カラムの順番について、以下のガイドラインを採用するため、ST06 は除外
+# https://docs.getdbt.com/best-practices/how-we-style/1-how-we-style-our-dbt-models
+# Use a consistent ordering of data types and consider grouping and labeling columns by type,
+exclude_rules = ST06
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = jaffle_shop
+target = ci

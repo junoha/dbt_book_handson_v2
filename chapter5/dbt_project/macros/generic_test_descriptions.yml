@@ -1,0 +1,277 @@
+version: 2
+
+# カスタムジェネリックテストのドキュメント
+#
+# 実装は tests/generic/custom_generic_data_tests.sql にある。
+# 公式ガイド (https://docs.getdbt.com/best-practices/writing-custom-generic-tests)
+# に従い、test patch（description）は macros/ 配下の YAML に記述する。
+# tests/generic/ 配下に書くと dbt のパッチ解決が macro として行われず、
+# `dbt parse` で "Found patch for macro ... which was not found" の警告が出るため。
+
+macros:
+  - name: test_test_data_freshness_within_hours
+    description: |
+      **カスタムジェネリックテスト**: データ鮮度チェック
+
+      **用途**: 指定した時間以内にデータが更新されているかを検証
+
+      **使用例**:
+      ```yaml
+      - test_data_freshness_within_hours:
+          column_name: created_at
+          arguments:
+            hours_threshold: 24
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 日時カラム名
+      - name: hours_threshold
+        type: integer
+        description: 鮮度閾値（時間）
+
+  - name: test_test_values_in_range
+    description: |
+      **カスタムジェネリックテスト**: 値の範囲チェック
+
+      **用途**: 数値カラムが指定範囲内にあるかを検証
+
+      **使用例**:
+      ```yaml
+      - test_values_in_range:
+          column_name: age
+          arguments:
+            min_value: 0
+            max_value: 150
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 数値カラム名
+      - name: min_value
+        type: number
+        description: 最小値
+      - name: max_value
+        type: number
+        description: 最大値
+
+  - name: test_test_multi_column_relationships
+    description: |
+      **カスタムジェネリックテスト**: 複数カラム参照整合性チェック
+
+      **用途**: 複数カラムの組み合わせでの参照整合性を検証
+
+      **使用例**:
+      ```yaml
+      - test_multi_column_relationships:
+          arguments:
+            to_ref: ref('dim_customer')
+            from_columns: ['customer_id', 'region']
+            to_columns: ['customer_id', 'region']
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: to_ref
+        type: relation
+        description: 参照先モデル（ref() で指定）
+      - name: from_columns
+        type: list
+        description: 参照元カラムリスト
+      - name: to_columns
+        type: list
+        description: 参照先カラムリスト
+
+  - name: test_test_unique_combination
+    description: |
+      **カスタムジェネリックテスト**: 複数カラム一意性チェック
+
+      **用途**: 複数カラムの組み合わせが一意であることを検証
+
+      **使用例**:
+      ```yaml
+      - test_unique_combination:
+          arguments:
+            columns: ['customer_name', 'email']
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: columns
+        type: list
+        description: 一意性をチェックするカラムリスト
+
+  - name: test_test_statistical_outliers
+    description: |
+      **カスタムジェネリックテスト**: 統計的外れ値検出
+
+      **用途**: Z-score を用いた統計的外れ値の検出
+
+      **使用例**:
+      ```yaml
+      - test_statistical_outliers:
+          column_name: price
+          arguments:
+            z_score_threshold: 3
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 数値カラム名
+      - name: z_score_threshold
+        type: number
+        description: "Z-score 閾値（デフォルト: 3）"
+
+  - name: test_test_business_days_only
+    description: |
+      **カスタムジェネリックテスト**: ビジネス日検証
+
+      **用途**: 日付が平日（月-金）のみであることを検証
+
+      **使用例**:
+      ```yaml
+      - test_business_days_only:
+          column_name: order_date
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 日付カラム名
+
+  - name: test_expect_column_values_to_match_phone_format
+    description: |
+      **カスタムジェネリックテスト**: 日本の電話番号フォーマット検証
+
+      **用途**: 日本の携帯電話・固定電話番号の基本フォーマットをチェック
+      （携帯: 090/080/070-xxxx-xxxx、固定: 0x-xxxx-xxxx）
+
+      **使用例**:
+      ```yaml
+      - expect_column_values_to_match_phone_format:
+          column_name: phone
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 電話番号カラム名
+
+  - name: test_expect_column_values_to_be_reasonable_amount
+    description: |
+      **カスタムジェネリックテスト**: 金額の正当性チェック
+
+      **用途**: 金額の異常値（負の値、極端に大きな値、NaN/Infinity）を検出
+
+      **使用例**:
+      ```yaml
+      - expect_column_values_to_be_reasonable_amount:
+          column_name: total_amount
+          arguments:
+            min_value: 0
+            max_value: 1000000
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 金額カラム名
+      - name: min_value
+        type: number
+        description: "最小値（デフォルト: 0）"
+      - name: max_value
+        type: number
+        description: "最大値（デフォルト: 10000000）"
+
+  - name: test_expect_email_domain_not_in_denylist
+    description: |
+      **カスタムジェネリックテスト**: メールドメインの拒否リスト検証
+
+      **用途**: 指定したドメインリストに含まれるメールアドレスを検出
+
+      **使用例**:
+      ```yaml
+      - expect_email_domain_not_in_denylist:
+          column_name: email
+          arguments:
+            denylist: ['spam.com', 'fake.com']
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: メールアドレスカラム名
+      - name: denylist
+        type: list
+        description: 拒否ドメインのリスト
+
+  - name: test_expect_column_text_length_between
+    description: |
+      **カスタムジェネリックテスト**: 文字列長の範囲チェック
+
+      **用途**: 文字列カラムの長さが指定範囲内にあるかを検証
+
+      **使用例**:
+      ```yaml
+      - expect_column_text_length_between:
+          column_name: customer_name
+          arguments:
+            min_length: 1
+            max_length: 100
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: 文字列カラム名
+      - name: min_length
+        type: integer
+        description: "最小文字数（デフォルト: 1）"
+      - name: max_length
+        type: integer
+        description: "最大文字数（デフォルト: 255）"
+
+  - name: test_expect_percentage_values_in_valid_range
+    description: |
+      **カスタムジェネリックテスト**: パーセンテージ値の妥当性チェック
+
+      **用途**: パーセンテージ値が 0-100% または 0.0-1.0 の範囲内にあるかを検証
+
+      **使用例**:
+      ```yaml
+      - expect_percentage_values_in_valid_range:
+          column_name: profit_margin
+          arguments:
+            percentage_format: percentage
+      ```
+    arguments:
+      - name: model
+        type: relation
+        description: 対象モデル
+      - name: column_name
+        type: string
+        description: パーセンテージカラム名
+      - name: percentage_format
+        type: string
+        description: "値の形式（'decimal' = 0.0-1.0、'percentage' = 0-100、デフォルト: 'decimal'）"

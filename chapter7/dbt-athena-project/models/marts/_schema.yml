@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: orders
+    description: 注文データのインクリメンタルモデル。隠しパーティショニングで日次クエリを高速化する。別プロジェクトからも参照できるようpublicで公開する。
+    access: public
+    columns:
+      - name: order_id
+        description: 注文ID
+      - name: customer_id
+        description: 顧客ID
+      - name: ordered_at
+        description: 注文日時
+      - name: store_id
+        description: 店舗ID
+      - name: subtotal
+        description: 小計
+      - name: tax_paid
+        description: 税額
+      - name: order_total
+        description: 注文合計
+
+  - name: customer_orders
+    description: 顧客ごとの注文サマリ。merge戦略のインクリメンタルモデルで、差分更新とデータ保護ポリシーに基づく削除を扱う。
+    columns:
+      - name: customer_id
+        description: 顧客ID（主キー）
+        tests:
+          - unique
+          - not_null
+      - name: customer_name
+        description: 顧客名
+      - name: gdpr_deleted
+        description: 削除フラグ（Step 2で追加）。delete_conditionで削除対象の判定に使われる
+      - name: order_count
+        description: 注文回数
+      - name: total_amount
+        description: 累計注文金額
+      - name: first_order_at
+        description: 初回注文日時
+      - name: last_order_at
+        description: 最終注文日時

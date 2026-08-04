@@ -1,0 +1,86 @@
+chartConfig:
+  config:
+    eChartsConfig:
+      legend:
+        orient: horizontal
+        type: plain
+      series:
+        - encode:
+            xRef:
+              field: dim_customers_customer_name
+            yRef:
+              field: dim_customers_sum_customer_lifetime_value
+              pivotValues:
+                - field: dim_customers_customer_name
+                  value: 田中太郎
+          isFilteredOut: false
+          type: bar
+          yAxisIndex: 0
+        - encode:
+            xRef:
+              field: dim_customers_customer_name
+            yRef:
+              field: dim_customers_sum_customer_lifetime_value
+              pivotValues:
+                - field: dim_customers_customer_name
+                  value: 佐藤花子
+          isFilteredOut: false
+          type: bar
+          yAxisIndex: 0
+      tooltip: ""
+      yAxis:
+        - name: 顧客生涯価値
+        - {}
+    layout:
+      flipAxes: true
+      showGridX: false
+      xField: dim_customers_customer_name
+      yField:
+        - dim_customers_sum_customer_lifetime_value
+  type: cartesian
+contentType: chart
+description: ""
+metricQuery:
+  additionalMetrics: []
+  customDimensions: []
+  dimensionOverrides: {}
+  dimensions:
+    - dim_customers_customer_name
+  exploreName: dim_customers
+  filters:
+    metrics:
+      and:
+        - id: 63d3f60f-f873-440f-a235-cf4969b72911
+          operator: greaterThan
+          target:
+            fieldId: dim_customers_sum_customer_lifetime_value
+          values:
+            - 0
+      id: 59604811-33d8-4299-bf8b-c8dd56b09ee6
+  limit: 500
+  metricOverrides: {}
+  metrics:
+    - dim_customers_sum_total_orders
+    - dim_customers_customer_status
+    - dim_customers_sum_total_amount
+    - dim_customers_sum_customer_lifetime_value
+  sorts:
+    - descending: true
+      fieldId: dim_customers_sum_total_orders
+  tableCalculations: []
+name: 顧客生涯価値
+pivotConfig:
+  columns:
+    - dim_customers_customer_name
+slug: sh1b6
+spaceSlug: shared
+tableConfig:
+  columnOrder:
+    - dim_customers_customer_name
+    - dim_customers_sum_total_orders
+    - dim_customers_customer_status
+    - dim_customers_sum_total_amount
+    - dim_customers_sum_customer_lifetime_value
+tableName: dim_customers
+verification: null
+version: 1

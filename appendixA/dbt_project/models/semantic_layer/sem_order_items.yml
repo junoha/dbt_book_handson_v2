@@ -1,0 +1,86 @@
+# 注文明細セマンティックモデル（fct_order_items ベース）— 発展課題
+#
+# 本付録の標準手順では無効化している（config.enabled: false）。
+# sem_orders の revenue は注文ヘッダー粒度（fct_orders）で定義しているため、
+# 「カテゴリ別売上」のように商品軸で切る分析はできない。商品軸を使うには、
+# product への外部キーを持つ明細粒度（fct_order_items）のセマンティックモデルが必要になる。
+#
+# 試す手順
+#   1. 下の config.enabled をすべて true に変える（または config ブロックを削除する）
+#   2. dbt parse
+#   3. mf query --metrics item_revenue --group-by product__category_name --order -item_revenue --limit 10
+#
+# 有効化すると mf list metrics が 3 件から 5 件に増えるため、本文の掲載内容とは一致しなくなる。
+# 一方 mf list dimensions --metrics revenue は 9 件のまま変わらない。revenue は注文ヘッダー粒度
+# （fct_orders）の measure なので、明細を経由して商品軸に到達することはないためである。
+# 商品軸で売上を見るには、ここで定義する明細粒度のメトリクス（item_revenue）を使う。
+
+semantic_models:
+  - name: order_items
+    description: |
+      注文明細の fact テーブル。1 行 = 1 明細。
+      product への外部キーを持つため、商品・カテゴリ・仕入先を軸に売上を切り分けられる。
+    model: ref('fct_order_items')
+    config:
+      enabled: false
+    defaults:
+      agg_time_dimension: order_date
+
+    entities:
+      - name: order_item
+        type: primary
+        expr: order_item_id
+      - name: order
+        type: foreign
+        expr: order_id
+      - name: product
+        type: foreign
+        expr: product_id
+      - name: customer
+        type: foreign
+        expr: customer_id
+
+    dimensions:
+      - name: order_date
+        description: 注文日（日付粒度）
+        type: time
+        type_params:
+          time_granularity: day
+      - name: quantity_type
+        description: 数量区分（single / multiple 等）
+        type: categorical
+
+    measures:
+      - name: line_total
+        description: 明細金額（quantity × unit_price）の合計
+        agg: sum
+        expr: line_total
+      - name: quantity
+        description: 販売数量の合計
+        agg: sum
+        expr: quantity
+      - name: order_items
+        description: 明細件数
+        agg: sum
+        expr: order_item_count
+
+metrics:
+  - name: item_revenue
+    description: 明細ベースの売上（fct_order_items.line_total の合計）
+    label: Item Revenue
+    type: simple
+    config:
+      enabled: false
+    type_params:
+      measure:
+        name: line_total
+
+  - name: items_sold
+    description: 販売数量（fct_order_items.quantity の合計）
+    label: Items Sold
+    type: simple
+    config:
+      enabled: false
+    type_params:
+      measure:
+        name: quantity

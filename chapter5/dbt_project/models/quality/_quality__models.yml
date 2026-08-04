@@ -1,0 +1,307 @@
+version: 2
+models:
+  - name: quality_assessment
+    description: |
+      DMBOK2 ベースのデータ品質アセスメント結果。
+      本章で対象とする 4 つの品質ディメンション（完全性、一意性、妥当性、一貫性）を評価し、
+      品質スコアと合格/不合格判定（PASS / FAIL）を提供する。
+      なお、適時性（Timeliness）は Source Freshness で別途実装し、
+      正確性（Accuracy）はソースシステムとの照合が必要なため本フレームワークのスコープ外としている。
+    columns:
+      - name: column_name
+        description: 評価対象カラム名
+        data_tests:
+          - not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: table_name
+        description: 評価対象テーブル名
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [stg_zakka_mall__customers, stg_zakka_mall__orders, stg_zakka_mall__products,
+                  stg_zakka_mall__order_details, stg_zakka_mall__payments]
+        config:
+          meta:
+            dimension: &id001
+              type: string
+      - name: quality_dimension
+        description: 品質ディメンション（DMBOK準拠）
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [completeness, uniqueness, validity]
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: total_records
+        description: 総レコード数
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: quality_status
+        description: 品質判定結果
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [PASS, FAIL]
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: quality_records
+        description: 品質条件を満たすレコード数
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: quality_score
+        description: 品質スコア（0-100%）
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: assessment_timestamp
+        description: 評価実行時刻
+        data_tests:
+          - not_null
+        config:
+          meta:
+            dimension:
+              type: string
+  - name: business_impact_matrix
+    description: |
+      ビジネス影響度とデータ汚れ度合いのマトリックス。
+      データ品質改善の優先順位付けに使用する。
+    columns:
+      - name: data_asset
+        description: >-
+          データ資産名
+        data_tests:
+          - not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: key_field
+        description: 評価対象のキーフィールド名
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: business_impact
+        description: ビジネスへの影響度
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [HIGH, MEDIUM, LOW]
+        config:
+          meta:
+            dimension: &id002
+              type: string
+      - name: data_contamination
+        description: データ汚れ度合い
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [HIGH, MEDIUM, LOW]
+        config:
+          meta:
+            dimension: &id003
+              type: string
+      - name: action_priority
+        description: 推奨アクション
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [URGENT_FIX, IMPROVE, MAINTAIN, MONITOR, CONSIDER_FIX]
+        config:
+          meta:
+            dimension: &id004
+              type: string
+      - name: execution_priority
+        description: 実行優先度（数値、小さいほど高優先）
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 10
+        config:
+          meta:
+            dimension: &id005
+              type: number
+      - name: business_justification
+        description: ビジネス影響度の根拠
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: contamination_assessment
+        description: データ汚れ度合いの評価内容
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: assessment_date
+        description: アセスメント実施日時
+        config:
+          meta:
+            dimension:
+              type: string
+  - name: quality_dashboard
+    description: |
+      データ品質ダッシュボード用の統合ビュー。
+      品質評価結果とビジネス優先度を統合して表示する。
+    columns:
+      - name: table_name
+        description: >-
+          評価対象テーブル名
+        data_tests:
+          - not_null
+        config:
+          meta:
+            dimension: *id001
+      - name: quality_grade
+        description: 品質グレード
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [EXCELLENT, GOOD, FAIR, POOR]
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: status_indicator
+        description: ステータス表示
+        data_tests:
+          - not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: overall_quality_score
+        description: 総合品質スコア
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: pass_rate
+        description: 品質チェック合格率（%）
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: total_assessments
+        description: 品質評価の総数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: passed_assessments
+        description: 合格した品質評価の数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: failed_assessments
+        description: 不合格となった品質評価の数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: excellent_dimensions
+        description: スコア95以上の品質ディメンション数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: good_dimensions
+        description: スコア80〜95の品質ディメンション数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: poor_dimensions
+        description: スコア80未満の品質ディメンション数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: total_dimensions
+        description: 評価対象の品質ディメンション総数
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: business_impact
+        description: ビジネス影響度（HIGH, MEDIUM, LOW, UNKNOWN）
+        config:
+          meta:
+            dimension: *id002
+      - name: data_contamination
+        description: データ汚れ度合い（HIGH, MEDIUM, LOW, UNKNOWN）
+        config:
+          meta:
+            dimension: *id003
+      - name: action_priority
+        description: 推奨アクション（URGENT_FIX, IMPROVE, MAINTAIN, MONITOR, CONSIDER_FIX, ASSESS）
+        config:
+          meta:
+            dimension: *id004
+      - name: execution_priority
+        description: 実行優先度（数値、小さいほど高優先）
+        config:
+          meta:
+            dimension: *id005
+      - name: min_quality_score
+        description: 品質スコアの最小値
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: max_quality_score
+        description: 品質スコアの最大値
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: dashboard_refresh_time
+        description: ダッシュボード更新時刻
+        config:
+          meta:
+            dimension:
+              type: string

@@ -1,0 +1,572 @@
+version: 2
+models:
+  - name: stg_zakka_mall__customers
+    description: 顧客データのステージングモデル
+    config:
+      elementary:
+        timestamp_column: registration_date
+    data_tests:
+      # Elementary 異常検知テスト
+      - elementary.volume_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            time_bucket:
+              period: day
+              count: 1
+            training_period:
+              period: day
+              count: "{{ var('elementary_training_period_days') }}"
+            detection_period:
+              period: day
+              count: "{{ var('elementary_detection_period_days') }}"
+            anomaly_sensitivity: "{{ var('elementary_anomaly_sensitivity') }}"
+
+      - elementary.freshness_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            time_bucket:
+              period: hour
+              count: 1
+
+      - elementary.all_columns_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            column_anomalies:
+              - null_count
+              - missing_count
+              - min_length
+              - max_length
+            exclude_prefix: _
+
+      - elementary.dimension_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            dimensions:
+              - status
+            time_bucket:
+              period: day
+              count: 1
+
+      - elementary.schema_changes_from_baseline:
+          config:
+            severity: warn
+            tags: [elementary, schema_monitoring]
+
+      # カスタムジェネリックテスト: 年齢範囲チェック
+      - test_values_in_range:
+          column_name: age
+          config:
+            severity: warn
+            tags: [custom_test]
+          arguments:
+            min_value: 0
+            max_value: "{{ var('max_customer_age') }}"
+
+      # カスタムジェネリックテスト: データ鮮度チェック
+      - test_data_freshness_within_hours:
+          column_name: created_at
+          config:
+            severity: warn
+            tags: [custom_test]
+          arguments:
+            hours_threshold: "{{ var('freshness_threshold_hours') }}"
+
+    columns:
+      - name: customer_id
+        description: 顧客ID
+        data_type: bigint
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_name
+        description: 顧客名
+        data_type: varchar
+        data_tests:
+          - not_null
+      - name: email
+        description: メールアドレス
+        data_type: varchar
+        data_tests:
+          - unique
+          - not_null
+          - expect_email_domain_not_in_denylist:
+              arguments:
+                denylist: [spam.com, fake.com, test.test, tempmail.com]
+              config:
+                severity: warn
+          - expect_column_text_length_between:
+              arguments:
+                min_length: 5
+                max_length: 100
+              config:
+                severity: warn
+      - name: phone
+        description: 電話番号
+        data_type: varchar
+        data_tests:
+          - expect_column_values_to_match_phone_format:
+              arguments: {}
+              config:
+                severity: warn
+      - name: status
+        description: 顧客ステータス
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [active, inactive, suspended]
+              description: 顧客ステータスは定義された値のみ許可。不正な値はソースシステムのマスタデータ不整合を示す。
+      - name: registration_date
+        description: 登録日
+        data_type: date
+        data_tests:
+          - not_null
+      - name: birth_date
+        description: 生年月日
+        data_type: date
+      - name: created_at
+        description: 作成日時
+        data_type: timestamptz
+      - name: updated_at
+        description: 更新日時
+        data_type: timestamptz
+      - name: age
+        description: 年齢（計算項目）
+        data_type: bigint
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 0
+                max_value: 150
+          - dbt_expectations.expect_column_mean_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 18
+                max_value: 80
+  - name: stg_zakka_mall__products
+    description: 商品データのステージングモデル
+    data_tests:
+      # Elementary 異常検知テスト
+      - elementary.volume_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            fail_on_zero: false
+
+      - elementary.all_columns_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            column_anomalies:
+              - null_count
+              - zero_count
+              - negative_count
+            exclude_regexp: .*_id$
+
+      - elementary.schema_changes_from_baseline:
+          config:
+            severity: warn
+            tags: [elementary, schema_monitoring]
+      - test_statistical_outliers:
+          column_name: price
+          config:
+            severity: warn
+            tags: [custom_test]
+          arguments:
+            z_score_threshold: 3
+
+      # カスタムジェネリックテスト: 複数カラム一意性
+      - test_unique_combination:
+          config:
+            severity: error
+            tags: [custom_test]
+          arguments:
+            columns: [product_name, category_id]
+
+    columns:
+      - name: product_id
+        description: 商品ID
+        data_type: bigint
+        data_tests:
+          - unique
+          - not_null
+      - name: category_id
+        description: カテゴリID
+        data_type: bigint
+        data_tests:
+          - not_null
+      - name: product_name
+        description: 商品名
+        data_type: varchar
+        data_tests:
+          - not_null
+      - name: price
+        description: 販売価格
+        data_type: numeric
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 0
+                max_value: 1000000
+          - dbt_expectations.expect_column_quantile_values_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                quantile: 0.95
+                min_value: 100
+                max_value: 50000
+          - expect_column_values_to_be_reasonable_amount:
+              arguments:
+                min_value: 1
+                max_value: 500000
+              config:
+                severity: warn
+      - name: cost
+        description: 原価
+        data_type: numeric
+      - name: stock_quantity
+        description: 在庫数量
+        data_type: integer
+        data_tests:
+          - not_null
+      - name: is_active
+        description: アクティブフラグ
+        data_type: boolean
+      - name: created_at
+        description: 作成日時
+        data_type: timestamptz
+      - name: updated_at
+        description: 更新日時
+        data_type: timestamptz
+      - name: profit_margin
+        description: |
+          利益率（計算項目、百分率）。
+          算出ルール:
+            - cost > 0 かつ price > 0: round((price - cost) / price * 100, 2)
+            - cost が NULL または 0 かつ price > 0: 100.00（原価ゼロ扱い）
+            - price が NULL または 0 かつ cost > 0: -100.00（売価ゼロの完全赤字扱い）
+            - price と cost が両方 NULL または 0: NULL
+              （未登録の組み合わせ。下流の dbt_expectations は NULL を自動スキップする）
+        data_type: numeric(10, 2)
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: -100.0
+                max_value: 100.0
+          - dbt_expectations.expect_column_median_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 10.0
+                max_value: 70.0
+          - expect_percentage_values_in_valid_range:
+              arguments:
+                percentage_format: percentage
+              config:
+                severity: warn
+  - name: stg_zakka_mall__product_categories
+    description: 商品カテゴリデータのステージングモデル
+    columns:
+      - name: category_id
+        description: >-
+          カテゴリID
+        data_tests:
+          - unique
+          - not_null
+      - name: parent_category_id
+        description: 親カテゴリID
+      - name: category_name
+        description: カテゴリ名
+        data_tests:
+          - not_null
+      - name: created_at
+        description: 作成日時
+      - name: updated_at
+        description: 更新日時
+  - name: stg_zakka_mall__orders
+    description: 注文データのステージングモデル
+    config:
+      elementary:
+        timestamp_column: order_date
+    data_tests:
+      # Elementary 異常検知テスト
+      - elementary.volume_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            time_bucket:
+              period: hour
+              count: 1
+            training_period:
+              period: day
+              count: 7
+            detection_period:
+              period: hour
+              count: "{{ var('elementary_detection_period_days') * 12 }}"
+            anomaly_sensitivity: "{{ var('elementary_anomaly_sensitivity') - 0.5 }}"
+            seasonality: hour_of_day
+
+      - elementary.freshness_anomalies:
+          config:
+            severity: error
+            tags: [elementary, anomaly_detection]
+          arguments:
+            time_bucket:
+              period: hour
+              count: 1
+
+      - elementary.dimension_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            dimensions:
+              - order_status
+            time_bucket:
+              period: hour
+              count: 1
+            where_expression: order_status in ('pending', 'processing', 'shipped', 'delivered')
+
+      - elementary.schema_changes_from_baseline:
+          config:
+            severity: warn
+            tags: [elementary, schema_monitoring]
+
+      # カスタムジェネリックテスト: ビジネス日チェック
+      - test_business_days_only:
+          column_name: order_date
+          config:
+            severity: warn
+            tags: [custom_test]
+
+      # カスタムジェネリックテスト: 参照整合性チェック
+      - test_multi_column_relationships:
+          config:
+            severity: error
+            tags: [custom_test]
+          arguments:
+            to_ref: ref('stg_zakka_mall__customers')
+            from_columns: [customer_id]
+            to_columns: [customer_id]
+
+    columns:
+      - name: order_id
+        description: 注文ID
+        data_type: bigint
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: 顧客ID
+        data_type: bigint
+        data_tests:
+          - not_null:
+              description: 全ての注文は顧客IDを持つ必要がある。NULLの場合はデータ取り込みエラーを示す。
+      - name: order_status
+        description: 注文ステータス
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [pending, processing, shipped, delivered, cancelled, refunded]
+              config:
+                where: order_date >= current_date - interval '30 days'
+                severity: "{{ 'warn' if target.name == 'dev' else 'error' }}"
+              description: 過去30日間の注文ステータスは定義された値のみ許可。本番環境ではエラー、開発環境では警告。
+      - name: order_date
+        description: 注文日
+        data_type: date
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_row_values_to_have_recent_data:
+              config:
+                severity: warn
+              arguments:
+                datepart: day
+                interval: 365
+      - name: total_amount
+        description: 合計金額
+        data_type: numeric
+        data_tests:
+          - not_null:
+              config:
+                where: >-
+                  {{ 'order_date >= current_date - interval \'7 days\'' if target.name == 'prod' else
+                  '1=1' }}
+                severity: "{{ 'warn' if target.name == 'dev' else 'error' }}"
+              description: 本番環境では過去7日間のデータのみ厳格チェック。開発環境では全期間を警告レベルでチェック。
+          - dbt_expectations.expect_column_values_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 0
+                max_value: 1000000
+          - dbt_expectations.expect_column_stdev_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 100
+                max_value: 50000
+      - name: shipping_fee
+        description: 送料
+        data_type: numeric
+      - name: tax_amount
+        description: 税額
+        data_type: numeric
+      - name: created_at
+        description: 作成日時
+        data_type: timestamptz
+      - name: updated_at
+        description: 更新日時
+        data_type: timestamptz
+  - name: stg_zakka_mall__order_details
+    description: 注文明細データのステージングモデル
+    columns:
+      - name: order_detail_id
+        description: >-
+          注文明細ID
+        data_tests:
+          - unique
+          - not_null
+      - name: order_id
+        description: 注文ID
+        data_tests:
+          - not_null
+      - name: product_id
+        description: 商品ID
+        data_tests:
+          - not_null
+      - name: quantity
+        description: 数量
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              config:
+                severity: warn
+              arguments:
+                min_value: 1
+                max_value: 100
+          - dbt_expectations.expect_column_most_common_value_to_be_in_set:
+              config:
+                severity: warn
+              arguments:
+                value_set: [1, 2, 3]
+                top_n: 1
+                quote_values: false
+      - name: unit_price
+        description: 単価
+        data_tests:
+          - not_null
+      - name: line_total
+        description: 行合計
+        data_tests:
+          - not_null
+      - name: created_at
+        description: 作成日時
+  - name: stg_zakka_mall__payments
+    description: 支払いデータのステージングモデル
+    config:
+      elementary:
+        timestamp_column: payment_date
+    data_tests:
+      # Elementary 異常検知テスト
+      # 運用段階の異常検知は「検知はするが build は止めない」方針とし、
+      # 他のステージングモデルと同じく severity: warn に揃える
+      - elementary.volume_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            time_bucket:
+              period: hour
+              count: 1
+            training_period:
+              period: day
+              count: "{{ var('elementary_training_period_days') }}"
+            detection_period:
+              period: hour
+              count: "{{ var('elementary_detection_period_days') * 1.5 | int }}"
+            anomaly_sensitivity: "{{ var('elementary_anomaly_sensitivity') - 1 }}"
+
+      - elementary.dimension_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            dimensions:
+              - payment_status
+              - payment_method
+            time_bucket:
+              period: hour
+              count: 1
+
+      - elementary.event_freshness_anomalies:
+          config:
+            severity: warn
+            tags: [elementary, anomaly_detection]
+          arguments:
+            event_timestamp_column: payment_date
+            time_bucket:
+              period: hour
+              count: 1
+
+      - elementary.schema_changes_from_baseline:
+          config:
+            severity: warn
+            tags: [elementary, schema_monitoring]
+
+    columns:
+      - name: payment_id
+        description: 支払いID
+        data_type: bigint
+        data_tests:
+          - unique
+          - not_null
+      - name: order_id
+        description: 注文ID
+        data_type: bigint
+        data_tests:
+          - not_null
+      - name: payment_status
+        description: 支払ステータス
+        data_type: varchar
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [pending, completed, failed, refunded]
+      - name: payment_method
+        description: 支払方法
+        data_type: varchar
+      - name: payment_date
+        description: 支払日
+        data_type: date
+      - name: payment_amount
+        description: 支払金額
+        data_type: numeric
+        data_tests:
+          - not_null
+      - name: created_at
+        description: 作成日時
+        data_type: timestamptz
+      - name: updated_at
+        description: 更新日時
+        data_type: timestamptz

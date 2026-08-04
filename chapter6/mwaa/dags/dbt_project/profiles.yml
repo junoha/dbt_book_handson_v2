@@ -1,0 +1,12 @@
+jaffle_shop:
+  target: prod
+  outputs:
+    prod:
+      type: athena
+      region_name: "{{ env_var('AWS_DEFAULT_REGION', 'ap-northeast-1') }}"
+      database: awsdatacatalog
+      schema: jaffle_shop_ch6_prod
+      s3_staging_dir: "s3://{{ env_var('AIRFLOW__CUSTOM__S3_BUCKET_ATHENA') }}/staging/"
+      work_group: "{{ env_var('AIRFLOW__CUSTOM__ATHENA_WORK_GROUP') }}"
+      num_retries: 1
+      threads: 4

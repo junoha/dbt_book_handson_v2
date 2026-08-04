@@ -1,0 +1,75 @@
+chartConfig:
+  config:
+    columns: {}
+    conditionalFormattings: []
+    hideRowNumbers: false
+    metricsAsRows: false
+    showColumnCalculation: false
+    showResultsTotal: false
+    showRowCalculation: false
+    showSubtotals: false
+    showTableNames: false
+  type: table
+contentType: chart
+dashboardSlug: dbt-book-demo-dashboard
+description: ""
+metricQuery:
+  additionalMetrics: []
+  customDimensions: []
+  dimensionOverrides: {}
+  dimensions:
+    - quality_dashboard_action_priority
+    - quality_dashboard_business_impact
+    - quality_dashboard_dashboard_refresh_time
+    - quality_dashboard_data_contamination
+    - quality_dashboard_excellent_dimensions
+    - quality_dashboard_execution_priority
+    - quality_dashboard_failed_assessments
+    - quality_dashboard_good_dimensions
+    - quality_dashboard_max_quality_score
+    - quality_dashboard_min_quality_score
+    - quality_dashboard_overall_quality_score
+    - quality_dashboard_pass_rate
+    - quality_dashboard_passed_assessments
+    - quality_dashboard_poor_dimensions
+    - quality_dashboard_quality_grade
+    - quality_dashboard_status_indicator
+    - quality_dashboard_table_name
+    - quality_dashboard_total_assessments
+    - quality_dashboard_total_dimensions
+  exploreName: quality_dashboard
+  filters: {}
+  limit: 500
+  metricOverrides: {}
+  metrics: []
+  sorts:
+    - descending: false
+      fieldId: quality_dashboard_action_priority
+  tableCalculations: []
+name: Quality Dashboard
+slug: quality-dashboard
+spaceSlug: shared
+tableConfig:
+  columnOrder:
+    - quality_dashboard_action_priority
+    - quality_dashboard_business_impact
+    - quality_dashboard_dashboard_refresh_time
+    - quality_dashboard_data_contamination
+    - quality_dashboard_excellent_dimensions
+    - quality_dashboard_execution_priority
+    - quality_dashboard_failed_assessments
+    - quality_dashboard_good_dimensions
+    - quality_dashboard_max_quality_score
+    - quality_dashboard_min_quality_score
+    - quality_dashboard_overall_quality_score
+    - quality_dashboard_pass_rate
+    - quality_dashboard_passed_assessments
+    - quality_dashboard_poor_dimensions
+    - quality_dashboard_quality_grade
+    - quality_dashboard_status_indicator
+    - quality_dashboard_table_name
+    - quality_dashboard_total_assessments
+    - quality_dashboard_total_dimensions
+tableName: quality_dashboard
+verification: null
+version: 1

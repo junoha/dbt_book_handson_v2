@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI 実行
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      S3_BUCKET_ATHENA: ${{ secrets.S3_BUCKET_ATHENA }}
+      DBT_TARGET: ci
+
+    steps:
+      - name: コードのチェックアウト
+        uses: actions/checkout@v6
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: ">=0.11"
+          cache-python: "true"
+
+      - name: 依存関係インストール
+        run: uv sync --frozen
+
+      - name: AWS 認証設定
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gh-oidc-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: ap-northeast-1
+
+      - name: sqlfluff lint 実行
+        run: uv run sqlfluff lint models
+        working-directory: dbt_project
+
+      - name: dbt build 実行
+        run: uv run dbt build
+        working-directory: dbt_project

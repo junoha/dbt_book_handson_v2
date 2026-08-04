@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: stg_jaffle_shop__customers
+    description: |
+      - **目的**: 顧客マスタのステージングモデル。raw_customers を業務命名 (customer_id / customer_name) に揃える薄いレイヤー。
+      - **粒度**: 1 行 1 顧客 (customer_id で一意)
+      - **更新**: View。上流 raw_customers の更新に追随する。
+      - **備考**: 本モデルはリネームのみを担当し、ビジネスロジックは mart 層で実装する。
+    columns:
+      - name: customer_id
+        description: '{{ doc("customer_id") }}'
+      - name: customer_name
+        description: '{{ doc("column__customer_name") }}'
+        config:
+          meta:
+            contains_pii: true
+
+  - name: stg_jaffle_shop__orders
+    description: |
+      - **目的**: 注文トランザクションのステージングモデル。raw_orders を業務命名に揃え、store_id → location_id のリネームを行う。
+      - **粒度**: 1 行 1 注文 (order_id で一意)
+      - **更新**: View。上流 raw_orders の更新に追随する。
+    columns:
+      - name: order_id
+        description: '{{ doc("order_id") }}'
+      - name: customer_id
+        description: '{{ doc("customer_id") }}'
+      - name: location_id
+        description: '{{ doc("column__location_id") }}'
+      - name: subtotal
+        description: '{{ doc("column__subtotal") }}'
+      - name: tax_paid
+        description: '{{ doc("column__tax_paid") }}'
+      - name: order_total
+        description: '{{ doc("column__order_total") }}'
+      - name: ordered_at
+        description: '{{ doc("ordered_at") }}'
+
+  - name: stg_jaffle_shop__order_items
+    description: |
+      - **目的**: 注文明細のステージングモデル。raw_items を業務命名 (order_item_id / order_id / product_id) に揃える。
+      - **粒度**: 1 行 1 明細 (order_item_id で一意)
+      - **更新**: View。上流 raw_items の更新に追随する。
+      - **備考**: 本モデルはリネームのみ。商品属性との結合は mart 層で行う。
+    columns:
+      - name: order_item_id
+        description: "注文明細の一意キー。同一注文の中で商品ごとに 1 行ずつ発行される。"
+      - name: order_id
+        description: '{{ doc("order_id") }}'
+      - name: product_id
+        description: '{{ doc("product_id") }}'
+
+  - name: stg_jaffle_shop__products
+    description: |
+      - **目的**: 商品マスタのステージングモデル。raw_products を業務命名に揃え、フード/ドリンクのブールフラグを付与する。
+      - **粒度**: 1 行 1 SKU (product_id で一意)
+      - **更新**: View。上流 raw_products の更新に追随する。
+    columns:
+      - name: product_id
+        description: '{{ doc("product_id") }}'
+      - name: product_name
+        description: "商品名。メニュー表示や注文明細の表示に利用される日本語名。"
+      - name: product_type
+        description: |
+          - **意味**: 商品種別を表す。
+          - **許容値**: 'jaffle' (フード) | 'beverage' (ドリンク)
+        data_tests:
+          - name: accepted_values_stg_products_product_type
+            test_name: accepted_values
+            arguments:
+              values:
+                - jaffle
+                - beverage
+            config:
+              error_if: ">5"
+      - name: product_description
+        description: "商品の説明文。メニューカードやオンラインストアで表示される補足テキスト。"
+      - name: product_price
+        description: |
+          - **意味**: 商品の税抜販売単価を保持する。
+          - **単位**: 円 (整数)
+      - name: is_food_item
+        description: |
+          - **意味**: フード (jaffle) フラグ。product_type = 'jaffle' のとき true。
+          - **NULL 許容**: 不可 (coalesce で false を保証)
+      - name: is_drink_item
+        description: |
+          - **意味**: ドリンク (beverage) フラグ。product_type = 'beverage' のとき true。
+          - **NULL 許容**: 不可 (coalesce で false を保証)

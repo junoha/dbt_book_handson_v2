@@ -1,0 +1,137 @@
+name: "zakkamall_data_quality"
+version: "1.0.0"
+config-version: 2
+
+profile: "dbt_book_ch5_data_quality_project"
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "edr_target"
+  - "dbt_packages"
+  - "dbt_internal_packages"
+  - "logs"
+
+flags:
+  # Elementary 連携の必須設定。
+  require_explicit_package_overrides_for_builtin_materializations: false
+
+models:
+  zakkamall_data_quality:
+    staging:
+      +materialized: view
+      +tags: ["staging"]
+      +schema: staging
+      +docs:
+        node_color: "#F7931E"
+      +meta:
+        # Staging レイヤーはフォルダ単位でYAMLを管理
+        dbt-osmosis: "_zakka_mall__models.yml"
+        dbt-osmosis-options:
+          skip-add-tags: false
+
+    marts:
+      +materialized: table
+      +tags: ["mart"]
+      +schema: marts
+      +docs:
+        node_color: "#2196F3"
+      +meta:
+        # Marts レイヤーはモデル単位でYAMLを管理
+        dbt-osmosis: "_{model}.yml"
+
+    quality:
+      +materialized: table
+      +tags: ["quality"]
+      +schema: quality
+      +docs:
+        node_color: "#fdc355"
+      +meta:
+        # 品質レイヤーはフォルダ単位でYAMLを管理し、カラムの自動追加はしない
+        dbt-osmosis: "_quality__models.yml"
+        dbt-osmosis-options:
+          skip-add-columns: true
+          skip-add-data-types: true
+
+    +meta:
+      dbt-osmosis: "_{model}.yml"
+
+  elementary:
+    ## elementary models will be created in the schema '<your_schema>_elementary'
+    +schema: "elementary"
+    ## To disable elementary for dev, uncomment this:
+    # enabled: "{{ target.name in ['prod','analytics'] }}"
+
+  dbt_project_evaluator:
+    +materialized: table
+    +tags: ["dbt_project_evaluator"]
+    +schema: "dbt_project_evaluator"
+    # 環境変数で指定した場合のみ動作させる場合
+    # +enabled: "{{ env_var('ENABLE_DBT_PROJECT_EVALUATOR') ==  True | as_bool }}"
+
+seeds:
+  zakkamall_data_quality:
+    +schema: quality
+    +meta:
+      # seed は手動管理する _seeds.yml に固定し、カラムの自動追加はしない
+      dbt-osmosis: "_seeds.yml"
+      dbt-osmosis-options:
+        skip-add-columns: true
+        skip-add-data-types: true
+
+data_tests:
+  +store_failures: true
+  +severity: warn
+
+  # zakkamall プロジェクト配下のテストのデフォルト severity 設定。
+  zakkamall_data_quality:
+    +severity: error
+
+# プロジェクト評価を実行後に結果を表示
+on-run-end: "{{ dbt_project_evaluator.print_dbt_project_evaluator_issues() }}"
+
+vars:
+  # dbt_expectations の設定
+  "dbt_date:time_zone": "UTC"
+
+  # データ品質閾値
+  completeness_threshold: 0.95
+  validity_threshold: 0.90
+  consistency_threshold: 0.95
+
+  # 異常検知パラメータ (z-score)
+  outlier_threshold: 3.0
+
+  # Elementary設定
+  elementary_anomaly_sensitivity: 3
+  elementary_training_period_days: 14
+  elementary_detection_period_days: 2
+
+  # Source Freshness設定
+  freshness_threshold_hours: 6
+  critical_freshness_threshold_hours: 12
+
+  # ビジネスルール
+  max_customer_age: 150
+  min_product_price: 0
+  max_order_amount: 1000000
+
+  # 運用監視閾値
+  freshness_warning_hours: 12
+  freshness_critical_hours: 24
+  volume_drop_threshold: 0.5
+  volume_spike_threshold: 2.0
+  payment_mismatch_threshold: 0.01
+  quality_warning_percent: 5
+  quality_critical_percent: 10
+
+  # dbt_project_evaluator の命名規則カスタマイズ
+  # デフォルトの other_prefixes=['rpt_'] に 'quality_' / 'business_' を追加して、
+  # 本書独自の品質管理レイヤーを公式チェックの枠内で許容する
+  other_prefixes: ['rpt_', 'quality_', 'business_']

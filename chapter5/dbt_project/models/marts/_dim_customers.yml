@@ -1,0 +1,154 @@
+version: 2
+models:
+  - name: dim_customers
+    description: 顧客分析用ディメンションマート（dim_）。1 行 = 1 顧客の属性＋注文指標。
+    config:
+      contract:
+        enforced: true
+        alias_types: false
+    columns:
+      - name: customer_id
+        description: 顧客ID
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+        config:
+          meta:
+            metrics:
+              distinct_customer:
+                label: ユニーク顧客数
+                description: ユニーク顧客数
+                type: count_distinct
+            dimension:
+              type: number
+      - name: customer_name
+        description: 顧客名
+        data_type: varchar
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: email
+        description: メールアドレス
+        data_type: varchar
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: phone
+        description: 電話番号
+        data_type: varchar
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: registration_date
+        description: 登録日
+        data_type: date
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: date
+      - name: status
+        description: 顧客ステータス
+        data_type: varchar
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            metrics:
+              customer_status:
+                label: 顧客ステータス
+                description: 顧客ステータス
+                type: max
+            dimension:
+              type: string
+      - name: birth_date
+        description: 生年月日
+        data_type: date
+        config:
+          meta:
+            dimension:
+              type: date
+      - name: age
+        description: 年齢
+        data_type: bigint
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: first_order_date
+        description: 初回注文日（キャンセル・返金を除く）
+        data_type: date
+        config:
+          meta:
+            dimension:
+              type: date
+      - name: last_order_date
+        description: 最終注文日（キャンセル・返金を除く）
+        data_type: date
+        config:
+          meta:
+            dimension:
+              type: date
+      - name: total_orders
+        description: 総注文数（キャンセル・返金を除く）
+        data_type: bigint
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            metrics:
+              sum_total_orders:
+                label: 総注文数
+                description: 顧客の総注文数
+                type: sum
+            dimension:
+              type: number
+      - name: total_amount
+        description: 総注文金額（キャンセル・返金を除く）
+        data_type: numeric(15, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            metrics:
+              sum_total_amount:
+                label: 総注文金額
+                description: 顧客の総注文金額
+                type: sum
+            dimension:
+              type: number
+      - name: avg_order_amount
+        description: 平均注文金額（キャンセル・返金を除く）
+        data_type: numeric(15, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: customer_lifetime_value
+        description: 顧客生涯価値（キャンセル・返金を除いた完了支払い合計）
+        data_type: numeric(15, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            metrics:
+              sum_customer_lifetime_value:
+                label: 顧客生涯価値
+                description: 顧客の顧客生涯価値
+                type: sum
+            dimension:
+              type: number

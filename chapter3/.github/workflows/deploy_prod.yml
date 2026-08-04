@@ -1,0 +1,96 @@
+name: 本番デプロイ
+
+on: workflow_dispatch
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  dbt-build:
+    name: dbt ビルド
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      S3_BUCKET_ATHENA: ${{ secrets.S3_BUCKET_ATHENA }}
+      DBT_TARGET: prod
+
+    steps:
+      - name: コードのチェックアウト
+        uses: actions/checkout@v6
+
+      - name: ブランチ確認
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "This workflow can only be run on main branch"
+          exit 1
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: ">=0.11"
+          cache-python: "true"
+
+      - name: 依存関係インストール
+        run: uv sync --frozen
+
+      - name: AWS 認証設定
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gh-oidc-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: ap-northeast-1
+
+      - name: dbt build 実行
+        run: uv run dbt build --exclude-resource-type unit_test
+        working-directory: dbt_project
+
+  deploy-docs:
+    name: dbt ドキュメントデプロイ
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: dbt-build
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      S3_BUCKET_ATHENA: ${{ secrets.S3_BUCKET_ATHENA }}
+      AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
+      AMPLIFY_BRANCH_NAME: main
+      DBT_TARGET: prod
+
+    steps:
+      - name: コードのチェックアウト
+        uses: actions/checkout@v6
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          version: ">=0.11"
+          cache-python: "true"
+
+      - name: 依存関係インストール
+        run: uv sync --frozen
+
+      - name: AWS 認証設定
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gh-oidc-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: ap-northeast-1
+
+      - name: dbt ドキュメントデプロイ
+        if: ${{ env.AMPLIFY_APP_ID }}
+        run: |
+          uv run dbt docs generate
+          cd target
+          zip deploy.zip index.html manifest.json catalog.json
+          bash ${{ github.workspace }}/utils/deploy_amplify.sh deploy.zip
+        working-directory: dbt_project

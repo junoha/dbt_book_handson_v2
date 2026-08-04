@@ -1,0 +1,86 @@
+version: 2
+
+# Singular Tests Documentation
+
+data_tests:
+  - name: advanced_business_rules
+    description: |
+      高度なビジネスルール検証: 注文と支払いの整合性
+
+      **目的**: 複数テーブルにまたがる複雑なロジックのテスト
+
+      **検証内容**:
+      - 出荷以降（shipped / delivered）の注文の支払い金額一致性
+      - 出荷以降（shipped / delivered）の注文の支払い存在確認
+      - 受付・処理中（pending / processing）の注文の過払いチェック
+      - キャンセル注文の支払い残存チェック
+
+  - name: business_rule_customer_age_birth_date_consistency
+    description: |
+      顧客年齢と生年月日の整合性検証
+
+      **目的**: 計算された年齢と生年月日の論理的整合性をチェック
+
+      **検証内容**:
+      - 年齢計算ロジックの正確性
+      - 生年月日の妥当性（未来日でない）
+      - 年齢と生年月日の一貫性
+
+  - name: business_rule_order_detail_line_total_consistency
+    description: |
+      注文明細の行合計金額整合性検証
+
+      **目的**: 数量×単価 = 行合計の計算正確性をチェック
+
+      **検証内容**:
+      - 行合計 = 数量 × 単価の計算検証
+      - 小数点以下の丸め誤差許容（1円未満）
+
+  - name: business_rule_product_profit_margin_calculation
+    description: |
+      商品利益率計算の妥当性検証
+
+      **目的**: 利益率計算ロジックの正確性をチェック
+
+      **検証内容**:
+      - 利益率 = (価格 - 原価) / 価格 × 100の計算検証
+      - 負の利益率の妥当性チェック
+      - 原価・価格の非NULL制約
+
+  - name: cross_table_order_payment_amount_consistency
+    description: |
+      注文テーブルと支払いテーブル間の金額整合性
+
+      **目的**: 注文金額と支払い金額の整合性をチェック
+
+      **検証内容**:
+      - 注文合計金額と支払い合計金額の一致
+      - 部分支払いの妥当性
+      - 過払い・未払いの検出
+
+  - name: anomaly_orders_during_night_hours
+    description: |
+      深夜時間帯の注文比率異常検知
+
+      **目的**: 深夜 2〜6 時に作成された注文が全体に占める割合をモニタリングし、
+      Bot 注文・タイムゾーン不整合・海外からの想定外トラフィックなどを早期検知する。
+
+      **検証内容**:
+      - 深夜 2〜6 時（`extract(hour from created_at) between 2 and 6`）の注文件数比率
+      - 全注文に占める深夜時間帯の比率が 10% を超えた場合に異常と判定
+      - 通常運用では深夜時間帯の比率は 5% 程度に収まる想定
+
+  - name: seasonal_business_patterns
+    description: |
+      季節性ビジネスパターンの検証
+
+      **目的**: 売上の季節変動が想定範囲内かをチェック
+
+      **参照先**: `fct_orders`（marts レイヤー）。本章のレイヤー戦略に従い、
+      集計済みの marts でビジネス指標としての売上異常を検証する。
+      明細の整合性は staging 直接参照の他テストでカバーする。
+
+      **検証内容**:
+      - 月次売上の統計的異常値検出（Z-score > 3）
+      - 過去2年間のデータに基づく季節性分析
+      - 現在月の売上が異常に高い/低い場合の検出

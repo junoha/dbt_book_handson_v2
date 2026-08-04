@@ -1,0 +1,5 @@
+manifests:
+  - name: jaffle_shop_athena
+    type: file
+    config:
+      path: ../dbt-athena-project/target/manifest.json

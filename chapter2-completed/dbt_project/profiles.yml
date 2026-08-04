@@ -1,0 +1,13 @@
+dbt_project:
+  outputs:
+    dev:
+      dbname: dev
+      host: "{{ env_var('DBT_REDSHIFT_HOST') }}"
+      method: iam
+      port: 5439
+      schema: jaffle_shop_ch2_dev
+      threads: 4
+      type: redshift
+      user: placeholder # IAM 認証時は無視されるが YAML フィールドとしては必須
+      iam_profile: "{{ env_var('AWS_PROFILE') }}"
+  target: dev

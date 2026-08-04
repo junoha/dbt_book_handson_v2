@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: order_processing
+    description: |
+      ### Grain
+      1 row per order_id（注文ヘッダー単位）
+
+      ### Business process
+      EC サイトでの注文処理・決済・配送のオペレーション分析マート。
+      fct_orders を軸に dim_customers / dim_dates を結合し、
+      配送リードタイム分類・問題フラグなどの派生列を付与する。
+
+      ### 責務分担
+      fct_orders が注文メトリクスの single source of truth、
+      本マートはオペレーション視点のビュー。配送速度カテゴリや
+      オペレーション問題フラグ（返送・遅延・決済失敗のいずれか）を計算する。
+
+      ### 主要 KPI
+      - delivery_speed_category: not_delivered / fast (<=3日) / standard
+        (<=7日) / slow (<=14日) / very_slow (>14日)
+      - has_operational_issue: 返送・遅延・決済失敗のいずれかが true
+      - 決済失敗率、配送遅延率、充足ステータス分類
+    columns:
+      - name: order_id
+        description: "注文ID（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: order_number
+        description: "注文番号（業務キー）"
+      - name: order_date
+        description: "注文日"
+        data_tests:
+          - not_null
+      - name: customer_id
+        description: "顧客業務キー"
+        data_tests:
+          - not_null
+      - name: customer_key
+        description: "顧客サロゲートキー（dim_customers への外部キー）"
+      - name: date_key
+        description: "日付サロゲートキー（dim_dates への外部キー）"
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_dates')
+                field: date_key
+      - name: customer_name
+        description: "顧客名"
+      - name: customer_region
+        description: "顧客の地域区分"
+      - name: year
+        description: "注文年"
+      - name: month
+        description: "注文月"
+      - name: quarter
+        description: "注文四半期"
+      - name: weekday_flag
+        description: "平日・休日区分"
+      - name: order_status
+        description: "注文ステータス"
+      - name: fulfillment_status
+        description: "総合フルフィルメントステータス"
+      - name: payment_count
+        description: "決済件数"
+      - name: total_paid_amount
+        description: "支払い完了金額合計"
+      - name: has_completed_payment
+        description: "決済完了フラグ"
+      - name: has_failed_payment
+        description: "決済失敗フラグ"
+      - name: shipment_count
+        description: "配送件数"
+      - name: earliest_shipped_date
+        description: "最早発送日"
+      - name: latest_delivery_date
+        description: "最新配送完了日"
+      - name: has_delivered_shipment
+        description: "配送完了フラグ"
+      - name: has_delayed_shipment
+        description: "配送遅延フラグ"
+      - name: avg_delivery_lead_time_days
+        description: "平均配送リードタイム"
+      - name: order_to_delivery_lead_time_days
+        description: "注文から配送完了までの日数"
+      - name: total_amount
+        description: "注文合計金額"
+      - name: delivery_speed_category
+        description: "配送速度カテゴリ（not_delivered / fast / standard / slow / very_slow）"
+      - name: has_operational_issue
+        description: "オペレーション問題フラグ（返送・遅延・決済失敗のいずれかが true）"

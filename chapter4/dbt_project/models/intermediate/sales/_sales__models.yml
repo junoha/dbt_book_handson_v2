@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: int_orders_with_items
+    description: |
+      ### Grain
+      1 row per order_id（注文単位）
+
+      ### Business process
+      注文ヘッダーと明細（order_items）を結合し、明細レベルの集計値
+      （明細数、合計数量、明細合計金額、価格の min/max/avg など）を
+      注文単位に roll-up する。
+
+      ### 役割
+      Re-grain（粒度変換）。明細粒度から注文粒度への集約を intermediate に
+      閉じ込めることで、下流の fct_orders は注文粒度の集計メジャーを
+      直接参照できる。
+    columns:
+      - name: order_id
+        description: "注文ID（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_id
+        description: "顧客ID"
+        data_tests:
+          - not_null
+      - name: order_number
+        description: "注文番号（業務キー）"
+      - name: order_date
+        description: "注文日"
+      - name: order_status
+        description: "注文ステータス"
+      - name: total_amount
+        description: "注文合計金額（ヘッダー）"
+      - name: item_count
+        description: "明細数（order_items の行数）"
+      - name: total_quantity
+        description: "合計数量（明細の quantity の合計）"
+      - name: items_total
+        description: "明細合計金額（明細の line_total の合計）"
+      - name: min_item_price
+        description: "明細中の最小単価"
+      - name: max_item_price
+        description: "明細中の最大単価"
+      - name: avg_item_price
+        description: "明細中の平均単価"
+      - name: is_total_consistent
+        description: "注文ヘッダーの subtotal と明細合計 items_total が整合するか（差分 0.01 未満で true）"
+      - name: is_valid_order
+        description: "注文データの品質フラグ（stg_orders の is_valid_record 由来）"

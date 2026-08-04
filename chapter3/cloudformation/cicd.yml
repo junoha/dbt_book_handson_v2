@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation template for CI/CD (IAM role for GitHub Actions and Amplify hosting for dbt docs)"
+
+Parameters:
+  GitHubAccount:
+    Type: String
+    Description: GitHub account
+
+  GitHubRepository:
+    Type: String
+    Description: GitHub repository
+
+  AthenaStackName:
+    Type: String
+    Default: dbt-book-ch3-athena
+    Description: CloudFormation stack name for Athena work group
+
+  AppName:
+    Type: String
+    Default: dbt-book-ch3-docs
+    Description: Name of the Amplify app
+
+  BranchName:
+    Type: String
+    Default: main
+    Description: Name of the branch for deployment
+
+  CreateOIDCProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Whether to create the GitHub OIDC Provider in this stack. Set to false if it already exists in the account
+
+Conditions:
+  ShouldCreateOIDCProvider: !Equals [!Ref CreateOIDCProvider, "true"]
+
+Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: ShouldCreateOIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  GitHubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "GitHubActionsRole-${AWS::StackName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - ShouldCreateOIDCProvider
+                - !Ref GitHubOIDCProvider
+                - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringLike:
+                "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                "token.actions.githubusercontent.com:sub":
+                  - !Sub "repo:${GitHubAccount}/${GitHubRepository}:*"
+                  - !Sub "repo:${GitHubAccount}@*/${GitHubRepository}@*:*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonAthenaFullAccess
+      Policies:
+        - PolicyName: !Sub "S3AccessPolicy-${AWS::StackName}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetBucketLocation"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:ListBucketMultipartUploads"
+                  - "s3:ListMultipartUploadParts"
+                  - "s3:AbortMultipartUpload"
+                  - "s3:PutObject"
+                  - "s3:DeleteObject"
+                Resource:
+                  - !ImportValue
+                    Fn::Sub: "${AthenaStackName}-S3BucketAthenaArn"
+                  - !Sub
+                    - "${BucketArn}/*"
+                    - BucketArn: !ImportValue
+                        Fn::Sub: "${AthenaStackName}-S3BucketAthenaArn"
+        - PolicyName: !Sub "GlueAccessPolicy-${AWS::StackName}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "glue:GetTableVersions"
+                  - "glue:DeleteTableVersion"
+                Resource: "*"
+        - PolicyName: !Sub "AmplifyAccessPolicy-${AWS::StackName}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "amplify:CreateDeployment"
+                  - "amplify:StartDeployment"
+                  - "amplify:GetJob"
+                Resource: "*"
+
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: !Ref AppName
+      Platform: WEB
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: !Ref BranchName
+
+Outputs:
+  IAMRoleArn:
+    Value: !GetAtt GitHubActionsRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-IAMRoleArn"
+
+  AmplifyAppId:
+    Description: Amplify App ID
+    Value: !GetAtt AmplifyApp.AppId
+    Export:
+      Name: !Sub "${AWS::StackName}-AmplifyAppId"
+
+  AmplifyURL:
+    Description: Amplify App URL
+    Value: !Sub "https://${BranchName}.${AmplifyApp.DefaultDomain}"
+    Export:
+      Name: !Sub "${AWS::StackName}-AmplifyURL"

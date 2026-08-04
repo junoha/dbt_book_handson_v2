@@ -1,0 +1,233 @@
+version: 2
+sources:
+  - name: zakka_mall
+    description: ZakkaMall ECサイトのOLTPデータベース
+    schema: zakka_mall
+    tables:
+      - name: customer
+        description: 顧客マスタテーブル
+        data_tests:
+          - elementary.schema_changes:
+              config:
+                severity: error
+                tags: [elementary, schema_monitoring]
+        columns:
+          - name: customer_id
+            description: 顧客ID（主キー）
+            data_tests:
+              - unique
+              - not_null
+          - name: customer_name
+            description: 顧客名
+            data_tests:
+              - not_null
+          - name: email
+            description: メールアドレス
+            data_tests:
+              - unique
+              - not_null
+          - name: phone
+            description: 電話番号
+          - name: registration_date
+            description: 登録日
+            data_tests:
+              - not_null
+          - name: status
+            description: 顧客ステータス（active/inactive/suspended）
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [active, inactive, suspended]
+          - name: birth_date
+            description: 生年月日
+      - name: product_category
+        description: 商品カテゴリマスタテーブル
+        columns:
+          - name: category_id
+            description: カテゴリID（主キー）
+            data_tests:
+              - unique
+              - not_null
+          - name: category_name
+            description: カテゴリ名
+            data_tests:
+              - not_null
+          - name: parent_category_id
+            description: 親カテゴリID（階層構造用）
+      - name: product
+        description: 商品マスタテーブル
+        data_tests:
+          - elementary.schema_changes:
+              config:
+                severity: error
+                tags: [elementary, schema_monitoring]
+        columns:
+          - name: product_id
+            description: 商品ID（主キー）
+            data_tests:
+              - unique
+              - not_null
+          - name: product_name
+            description: 商品名
+            data_tests:
+              - not_null
+          - name: category_id
+            description: カテゴリID
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('zakka_mall', 'product_category')
+                    field: category_id
+          - name: price
+            description: 販売価格
+            data_tests:
+              - not_null
+          - name: cost
+            description: 原価
+          - name: stock_quantity
+            description: 在庫数量
+            data_tests:
+              - not_null
+          - name: is_active
+            description: 商品有効フラグ
+            data_tests:
+              - not_null
+
+      - name: order_header
+        description: 注文ヘッダテーブル
+        config:
+          freshness:
+            # 注文データは頻繁に更新されるため、より厳格な設定
+            warn_after: {count: 2, period: hour}
+            error_after: {count: 4, period: hour}
+          loaded_at_field: updated_at
+        data_tests:
+          - elementary.schema_changes:
+              config:
+                severity: error
+                tags: [elementary, schema_monitoring]
+        columns:
+          - name: order_id
+            description: 注文ID（主キー）
+            data_tests:
+              - unique
+              - not_null
+          - name: customer_id
+            description: 顧客ID
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('zakka_mall', 'customer')
+                    field: customer_id
+          - name: order_date
+            description: 注文日
+            data_tests:
+              - not_null
+          - name: order_status
+            description: 注文ステータス（pending/processing/shipped/delivered/cancelled/refunded）
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [pending, processing, shipped, delivered, cancelled, refunded]
+          - name: total_amount
+            description: 注文合計金額
+            data_tests:
+              - not_null
+          - name: shipping_fee
+            description: 送料
+          - name: tax_amount
+            description: 税額
+      - name: order_detail
+        description: 注文明細テーブル
+        config:
+          freshness:
+            # 注文データは頻繁に更新されるため、より厳格な設定
+            warn_after: {count: 2, period: hour}
+            error_after: {count: 4, period: hour}
+          loaded_at_field: created_at
+        data_tests:
+          - elementary.schema_changes:
+              config:
+                severity: error
+                tags: [elementary, schema_monitoring]
+        columns:
+          - name: order_detail_id
+            description: 注文明細ID（主キー）
+            data_tests:
+              - unique
+              - not_null
+          - name: order_id
+            description: 注文ID
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('zakka_mall', 'order_header')
+                    field: order_id
+          - name: product_id
+            description: 商品ID
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('zakka_mall', 'product')
+                    field: product_id
+          - name: quantity
+            description: 注文数量
+            data_tests:
+              - not_null
+          - name: unit_price
+            description: 単価
+            data_tests:
+              - not_null
+          - name: line_total
+            description: 明細合計金額
+            data_tests:
+              - not_null
+
+      - name: payment
+        description: 支払いテーブル
+        config:
+          freshness:
+            # 支払いデータも重要なため、厳格な設定
+            warn_after: {count: 3, period: hour}
+            error_after: {count: 6, period: hour}
+          loaded_at_field: updated_at
+        data_tests:
+          - elementary.schema_changes:
+              config:
+                severity: error
+                tags: [elementary, schema_monitoring]
+        columns:
+          - name: payment_id
+            description: 支払いID（主キー）
+            data_tests:
+              - unique
+              - not_null
+          - name: order_id
+            description: 注文ID
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('zakka_mall', 'order_header')
+                    field: order_id
+          - name: payment_date
+            description: 支払い日
+          - name: payment_amount
+            description: 支払い金額
+            data_tests:
+              - not_null
+          - name: payment_status
+            description: 支払いステータス（pending/completed/failed/refunded）
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: [pending, completed, failed, refunded]
+          - name: payment_method
+            description: 支払い方法

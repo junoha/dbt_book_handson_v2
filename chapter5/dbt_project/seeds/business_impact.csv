@@ -1,0 +1,7 @@
+data_asset,business_entity,key_field,business_impact,data_contamination,business_justification,contamination_assessment,priority_rank
+stg_zakka_mall__customers,顧客マスタ,customer_id,HIGH,HIGH,Core business entity - customer analytics,Duplicate customer records detected,1
+stg_zakka_mall__orders,注文マスタ（ヘッダ）,order_date,HIGH,HIGH,Revenue calculation and financial reporting,"Future-dated orders found, needs strengthened validation",2
+stg_zakka_mall__payments,支払,payment_amount,HIGH,HIGH,Revenue recognition and payment reconciliation,"Payment amounts inconsistent with order totals, negative amounts found",3
+stg_zakka_mall__products,商品マスタ,price,MEDIUM,HIGH,Product catalog and pricing analysis,"Zero, negative, and NULL prices detected",4
+stg_zakka_mall__order_details,注文明細,quantity,MEDIUM,HIGH,Inventory and sales volume consistency,Negative quantities and outliers require consistency check,5
+stg_zakka_mall__customers,顧客マスタ,email,HIGH,LOW,Customer communication channel,"Email format generally clean, ongoing monitoring sufficient",6

@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: int_products_with_category_and_supplier
+    description: |
+      ### Grain
+      1 row per product_id（商品単位）
+
+      ### Business process
+      商品・カテゴリ・仕入先の多段参照関係を 1 つの平坦なテーブルに統合し、
+      dim_products の前段として結合ロジックを intermediate に閉じ込める。
+
+      ### 役割
+      構造の簡素化。下流の dim_products はこの intermediate を `ref()` する
+      だけで、カテゴリ階層と仕入先属性を取得できる。
+    columns:
+      - name: product_id
+        description: "商品ID（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: product_name
+        description: "商品名"
+      - name: product_code
+        description: "商品コード"
+      - name: sku
+        description: "SKU（在庫管理単位）"
+      - name: unit_price
+        description: "単価"
+      - name: price_tier
+        description: "価格帯区分（low, medium, high, premium）"
+      - name: category_id
+        description: "カテゴリID"
+      - name: category_name
+        description: "カテゴリ名"
+      - name: category_path
+        description: "カテゴリ階層パス（LTREE）"
+      - name: supplier_id
+        description: "仕入先ID"
+      - name: supplier_name
+        description: "仕入先名"
+      - name: has_valid_references
+        description: "カテゴリおよび仕入先の参照整合性フラグ"
+      - name: is_valid_record
+        description: "データ品質フラグ"

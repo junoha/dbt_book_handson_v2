@@ -1,0 +1,172 @@
+version: 2
+
+unit_tests:
+  - name: test_stg_customer_age_calculation
+    model: stg_zakka_mall__customers
+    description: "顧客年齢計算ロジックをテスト"
+    config:
+      tags: ["unit_test", "staging"]
+    overrides:
+      macros:
+        # book_current_date マクロの戻り値を固定する（プロジェクト独自マクロ）
+        book_current_date: "CAST('2025-10-01' as date)"
+    given:
+      - input: source('zakka_mall', 'customer')
+        format: dict
+        rows:
+          - {
+              customer_id: 1,
+              customer_name: "田中太郎",
+              email: "tanaka@example.com",
+              phone: "090-1234-5678",
+              status: "active",
+              registration_date: "2023-01-01",
+              birth_date: "1990-01-01",
+              created_at: "2023-01-01 10:00:00",
+              updated_at: "2023-01-01 10:00:00",
+            }
+          - {
+              customer_id: 2,
+              customer_name: "佐藤花子",
+              email: "sato@example.com",
+              phone: "090-8765-4321",
+              status: "active",
+              registration_date: "2023-01-02",
+              birth_date: "1985-05-15",
+              created_at: "2023-01-02 11:00:00",
+              updated_at: "2023-01-02 11:00:00",
+            }
+    expect:
+      format: dict
+      rows:
+        - {
+            customer_id: 1,
+            customer_name: "田中太郎",
+            email: "tanaka@example.com",
+            phone: "090-1234-5678",
+            status: "active",
+            registration_date: "2023-01-01",
+            birth_date: "1990-01-01",
+            age: 35,
+            created_at: "2023-01-01 10:00:00",
+            updated_at: "2023-01-01 10:00:00",
+          }
+        - {
+            customer_id: 2,
+            customer_name: "佐藤花子",
+            email: "sato@example.com",
+            phone: "090-8765-4321",
+            status: "active",
+            registration_date: "2023-01-02",
+            birth_date: "1985-05-15",
+            age: 40,
+            created_at: "2023-01-02 11:00:00",
+            updated_at: "2023-01-02 11:00:00",
+          }
+
+  # 商品の利益率計算テスト（Retrospective アプローチ）
+  # 過去バグ由来: 計算式の取り違え（小数形式と百分率の混同）で障害発生履歴あり
+  # 標準利益率（40.00%）と低利益率（10.00%）の 2 パターンを代表入力として検証する
+  - name: test_stg_product_profit_margin
+    model: stg_zakka_mall__products
+    description: |
+      商品利益率計算ロジックをテスト（Retrospective アプローチ）。
+      過去に計算式の取り違え（小数形式と百分率の混同）で障害を起こした履歴があるため、
+      代表的な商品データ 2 件で利益率が百分率（40.00% / 10.00%）で出力されることを保証する。
+    config:
+      tags: ["unit_test", "staging"]
+    given:
+      - input: source('zakka_mall', 'product')
+        format: dict
+        rows:
+          - {
+              product_id: 1,
+              category_id: 1,
+              product_name: "テスト商品A",
+              price: 1000,
+              cost: 600,
+              stock_quantity: 10,
+              is_active: true,
+              created_at: "2023-01-01 10:00:00",
+              updated_at: "2023-01-01 10:00:00",
+            }
+          - {
+              product_id: 2,
+              category_id: 2,
+              product_name: "テスト商品B",
+              price: 2000,
+              cost: 1800,
+              stock_quantity: 5,
+              is_active: true,
+              created_at: "2023-01-01 10:00:00",
+              updated_at: "2023-01-01 10:00:00",
+            }
+    expect:
+      format: dict
+      rows:
+        - {
+            product_id: 1,
+            category_id: 1,
+            product_name: "テスト商品A",
+            price: 1000,
+            cost: 600,
+            stock_quantity: 10,
+            profit_margin: "40.00",
+            is_active: true,
+            created_at: "2023-01-01 10:00:00",
+            updated_at: "2023-01-01 10:00:00",
+          }
+        - {
+            product_id: 2,
+            category_id: 2,
+            product_name: "テスト商品B",
+            price: 2000,
+            cost: 1800,
+            stock_quantity: 5,
+            profit_margin: "10.00",
+            is_active: true,
+            created_at: "2023-01-01 10:00:00",
+            updated_at: "2023-01-01 10:00:00",
+          }
+
+  # エッジケース：0円商品のテスト（Prospective アプローチ）
+  - name: test_product_zero_price_edge_case
+    description: >
+      シナリオ: 0円商品の利益率計算（Prospective アプローチ・エッジケース）。
+        価格が 0 の場合に -100.00 が設定される（原価だけ発生している "完全赤字" 扱い）ことを確認する。
+        現実のデータにはまだ存在しないが、クーポン等でゼロ円販売が発生する将来に備える。
+
+    model: stg_zakka_mall__products
+
+    config:
+      tags: ["unit_test", "quality"]
+
+    given:
+      - input: source('zakka_mall', 'product')
+        rows:
+          - {
+              product_id: 999,
+              product_name: "無料サンプル",
+              category_id: 1,
+              price: 0,
+              cost: 100,
+              stock_quantity: 5,
+              is_active: true,
+              created_at: "2024-01-01 00:00:00",
+              updated_at: "2024-01-01 00:00:00",
+            }
+
+    expect:
+      rows:
+        - {
+            product_id: 999,
+            product_name: "無料サンプル",
+            category_id: 1,
+            price: 0,
+            cost: 100,
+            stock_quantity: 5,
+            is_active: true,
+            profit_margin: "-100.00",
+            created_at: "2024-01-01 00:00:00",
+            updated_at: "2024-01-01 00:00:00",
+          }

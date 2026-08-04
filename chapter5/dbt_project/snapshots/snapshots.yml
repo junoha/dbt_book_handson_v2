@@ -1,0 +1,28 @@
+snapshots:
+  - name: customer_snapshot
+    description: "顧客マスタの SCD Type-2 履歴管理。stg_zakka_mall__customers（型整形・age 計算済みの staging モデル）を入力とし、source の updated_at を契機に変更を時系列で追跡する。"
+    relation: ref('stg_zakka_mall__customers')
+    config:
+      schema: snapshots
+      unique_key: customer_id
+      strategy: timestamp
+      updated_at: updated_at
+      hard_deletes: invalidate
+      dbt_valid_to_current: "cast('9999-12-31' as timestamptz)"
+      tags:
+        - snapshot
+        - scd_type_2
+
+  - name: product_snapshot
+    description: "商品マスタの SCD Type-2 履歴管理。stg_zakka_mall__products（型整形・profit_margin 計算済みの staging モデル）を入力とし、source の updated_at を契機に変更を時系列で追跡する。"
+    relation: ref('stg_zakka_mall__products')
+    config:
+      schema: snapshots
+      unique_key: product_id
+      strategy: timestamp
+      updated_at: updated_at
+      hard_deletes: invalidate
+      dbt_valid_to_current: "cast('9999-12-31' as timestamptz)"
+      tags:
+        - snapshot
+        - scd_type_2

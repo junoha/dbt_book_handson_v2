@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_jaffle_shop__customers
+    description: "顧客データのstagingモデル。カラム名の標準化を行う。"
+    columns:
+      - name: customer_id
+        description: "顧客の一意識別子（UUID）"
+      - name: customer_name
+        description: "顧客のフルネーム"
+
+  - name: stg_jaffle_shop__orders
+    description: "注文データのstagingモデル。カラム名の標準化と金額のドル変換を行う。"
+    columns:
+      - name: order_id
+        description: "注文の一意識別子（UUID）"
+      - name: customer_id
+        description: "注文した顧客のID"
+      - name: store_id
+        description: "店舗ID（UUID）"
+      - name: ordered_at
+        description: "注文日時"
+      - name: subtotal
+        description: "小計金額（ドル単位）"
+      - name: tax_paid
+        description: "税額（ドル単位）"
+      - name: order_total
+        description: "合計金額（ドル単位）"
+
+  - name: stg_jaffle_shop__items
+    description: "注文明細データのstagingモデル。カラム名の標準化を行う。"
+    columns:
+      - name: order_item_id
+        description: "注文明細の一意識別子（UUID）"
+      - name: order_id
+        description: "対応する注文のID"
+      - name: product_id
+        description: "商品コード（SKU）"

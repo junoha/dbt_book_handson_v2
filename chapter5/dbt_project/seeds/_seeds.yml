@@ -1,0 +1,62 @@
+version: 2
+seeds:
+  - name: business_impact
+    description: |
+      データ資産ごとのビジネス影響度とデータ汚れ度合いを定義するマスタ。
+      ステークホルダーとの合意に基づき手動で管理する静的マトリックスで、
+      非エンジニアでも CSV 上で直接編集できる運用にしている。
+      このシードは `business_impact_matrix` モデルで ref されて、
+      `action_priority` / `execution_priority` を算出する元データになる。
+    config:
+      schema: quality
+      column_types:
+        data_asset: varchar
+        business_entity: varchar
+        key_field: varchar
+        business_impact: varchar
+        data_contamination: varchar
+        business_justification: text
+        contamination_assessment: text
+        priority_rank: integer
+    columns:
+      - name: data_asset
+        description: |
+          評価対象のデータ資産名。本章では staging モデル名
+          （`stg_zakka_mall__customers` 等）を指定し、`quality_assessment` の
+          `table_name` と JOIN できるようにしている。
+        data_tests:
+          - not_null
+      - name: business_entity
+        description: |
+          ビジネスサイドとの共通言語としてのエンティティ名（「顧客マスタ」など）。
+          `data_asset` が技術名（staging モデル名）であるのに対し、こちらは BI や
+          経営レビューでそのまま使える表記にする。実運用では、ビジネスエンティティ名と
+          staging モデル名のマッピング表として機能する。
+        data_tests:
+          - not_null
+      - name: key_field
+        description: '評価対象のキー項目（例: customer_id, order_date）'
+        data_tests:
+          - not_null
+      - name: business_impact
+        description: ビジネス影響度（HIGH / MEDIUM / LOW）
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [HIGH, MEDIUM, LOW]
+      - name: data_contamination
+        description: データ汚れ度合い（HIGH / MEDIUM / LOW）
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [HIGH, MEDIUM, LOW]
+      - name: business_justification
+        description: このデータ資産がビジネス上重要である理由
+      - name: contamination_assessment
+        description: 現在把握している品質問題の要点
+      - name: priority_rank
+        description: ステークホルダー合意に基づく初期の優先度（1 が最優先）
+        data_tests:
+          - not_null

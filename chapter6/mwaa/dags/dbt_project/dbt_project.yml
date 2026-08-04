@@ -1,0 +1,26 @@
+name: "jaffle_shop"
+version: "1.0.0"
+config-version: 2
+
+profile: "jaffle_shop"
+
+model-paths: ["models"]
+test-paths: ["tests"]
+
+clean-targets:
+  - "logs"
+  - "target"
+  - "dbt_packages"
+
+models:
+  jaffle_shop:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+      +meta:
+        owner: dbt book team
+        owner_email: dbt-book-team@example.com
+  +persist_docs:
+    relation: true
+    columns: true

@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: int_customers_with_address
+    description: |
+      ### Grain
+      1 row per customer_id（顧客単位）
+
+      ### Business process
+      顧客テーブルとデフォルト住所の 1 対多関係を平坦化し、
+      dim_customers の前段として 1 顧客 = 1 行の構造に正規化する。
+
+      ### 役割
+      base model 的パターン（構造の簡素化）。住所の SCD 管理や
+      SCD Type 2 のフィールド生成は下流の dim_customers に任せ、
+      このモデルは結合のみを担当する。
+    columns:
+      - name: customer_id
+        description: "顧客ID（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_name
+        description: "顧客名"
+      - name: email
+        description: "メールアドレス"
+      - name: customer_status
+        description: "顧客ステータス"
+      - name: customer_tenure_segment
+        description: "顧客在籍期間セグメント"
+      - name: prefecture
+        description: "都道府県（デフォルト住所）"
+      - name: region
+        description: "地域区分（北海道、東北、関東、中部、関西、中国、四国、九州・沖縄）"
+      - name: has_default_address
+        description: "デフォルト住所が存在するか"
+      - name: is_valid_record
+        description: "データ品質フラグ"

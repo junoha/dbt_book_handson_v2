@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: customers
+    description: "顧客サマリーテーブル。注文回数、合計金額、初回・最終注文日、商品カテゴリ別の注文数を含む。"
+    columns:
+      - name: customer_id
+        description: "顧客の一意識別子（UUID）"
+      - name: customer_name
+        description: "顧客のフルネーム"
+      - name: first_order_date
+        description: "初回注文日時"
+      - name: most_recent_order_date
+        description: "最終注文日時"
+      - name: number_of_orders
+        description: "注文回数"
+      - name: customer_lifetime_value
+        description: "顧客生涯価値（ドル単位）"
+      - name: total_items_ordered
+        description: "注文した商品の合計数"
+      - name: jaffle_items
+        description: "注文したジャッフルの数"
+      - name: beverage_items
+        description: "注文した飲み物の数"
+
+  - name: orders
+    description: "注文詳細テーブル。金額（ドル単位）と商品カテゴリ別の数量を含む。"
+    columns:
+      - name: order_id
+        description: "注文の一意識別子（UUID）"
+      - name: customer_id
+        description: "注文した顧客のID"
+      - name: ordered_at
+        description: "注文日時"
+      - name: subtotal
+        description: "小計金額（ドル単位）"
+      - name: tax_paid
+        description: "税額（ドル単位）"
+      - name: order_total
+        description: "合計金額（ドル単位）"
+      - name: item_count
+        description: "注文に含まれる商品数"
+      - name: jaffle_count
+        description: "注文に含まれるジャッフルの数"
+      - name: beverage_count
+        description: "注文に含まれる飲み物の数"

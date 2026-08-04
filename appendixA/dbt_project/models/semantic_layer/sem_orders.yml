@@ -1,0 +1,79 @@
+# 注文セマンティックモデル（fct_orders ベース）
+# レガシー spec（dbt Core 1.11 対応）で記述。
+# 1 注文 1 行の fact テーブルを元に、売上・注文数・平均注文単価の各メトリクスを定義する。
+semantic_models:
+  - name: orders
+    description: |
+      注文ヘッダーの fact テーブル。1 行 = 1 注文。
+      総額や税額、送料などの金額指標と、注文ステータスやサイズセグメント等の区分軸を持つ。
+    model: ref('fct_orders')
+    defaults:
+      agg_time_dimension: order_date
+
+    entities:
+      - name: order
+        type: primary
+        expr: order_id
+      - name: customer
+        type: foreign
+        expr: customer_id
+
+    dimensions:
+      - name: order_date
+        description: 注文日（日付粒度）
+        type: time
+        type_params:
+          time_granularity: day
+      - name: order_status
+        description: 注文ステータス（pending / processing / shipped / delivered / cancelled / refunded 等）
+        type: categorical
+      - name: order_size_segment
+        description: 注文サイズセグメント（small / medium / large / extra_large）
+        type: categorical
+
+    measures:
+      - name: subtotal
+        description: 税抜小計の合計
+        agg: sum
+        expr: subtotal
+      - name: tax_amount
+        description: 消費税額の合計
+        agg: sum
+        expr: tax_amount
+      - name: shipping_fee
+        description: 送料の合計
+        agg: sum
+        expr: shipping_fee
+      - name: total_amount
+        description: 税送料込みの注文合計金額
+        agg: sum
+        expr: total_amount
+      - name: orders
+        description: 注文件数
+        agg: sum
+        expr: order_count
+
+metrics:
+  - name: revenue
+    description: 税送料込みの売上（fct_orders.total_amount の合計）
+    label: Revenue
+    type: simple
+    type_params:
+      measure:
+        name: total_amount
+
+  - name: order_count
+    description: 注文件数
+    label: Order Count
+    type: simple
+    type_params:
+      measure:
+        name: orders
+
+  - name: avg_order_value
+    description: 平均注文単価（revenue / order_count）
+    label: Avg Order Value
+    type: ratio
+    type_params:
+      numerator: revenue
+      denominator: order_count

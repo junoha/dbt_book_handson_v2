@@ -1,0 +1,34 @@
+[sqlfluff]
+templater = dbt
+dialect = postgres
+sql_file_exts = .sql
+max_line_length = 100
+exclude_rules = LT05, L036
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+profile = dbt_book_apdx_data_modeling_project
+target = dev
+
+[sqlfluff:indentation]
+indented_joins = False
+indented_using_on = True
+template_blocks_indent = False
+tab_space_size = 4
+
+[sqlfluff:rules]
+allow_scalar = True
+single_table_references = consistent
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.identifiers]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.types]
+extended_capitalisation_policy = lower

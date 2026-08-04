@@ -1,0 +1,24 @@
+dbt_book_apdx_data_modeling_project:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: dbt_user
+      password: dbt_password
+      dbname: dbt_demo
+      schema: analytics
+      threads: 4
+      search_path: "analytics,zakka_mall"
+    
+    prod:
+      type: postgres
+      host: "{{ env_var('DBT_HOST') }}"
+      user: "{{ env_var('DBT_USER') }}"
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      port: "{{ env_var('DBT_PORT', 5432) }}"
+      dbname: "{{ env_var('DBT_DATABASE', 'dbt_demo') }}"
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}"
+      threads: 4
+      search_path: "analytics,zakka_mall"

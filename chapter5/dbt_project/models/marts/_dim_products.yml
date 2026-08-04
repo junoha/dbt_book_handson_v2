@@ -1,0 +1,129 @@
+version: 2
+models:
+  - name: dim_products
+    description: 商品分析用ディメンションマート（dim_）。1 行 = 1 商品の属性＋販売指標（unit_price は販売時点・cost は現時点の原価ベースの利益）。
+    config:
+      contract:
+        enforced: true
+        alias_types: false
+    columns:
+      - name: product_id
+        description: 商品ID
+        data_type: bigint
+        constraints:
+          - type: not_null
+          - type: primary_key
+        data_tests:
+          - unique
+          - not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: product_name
+        description: 商品名
+        data_type: varchar
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: category_name
+        description: カテゴリ名（カテゴリマスタとの left join なので NULL 可）
+        data_type: varchar
+        config:
+          meta:
+            dimension:
+              type: string
+      - name: price
+        description: 販売価格（商品マスタの現時点価格）
+        data_type: numeric(10, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: cost
+        description: 原価（商品マスタで未設定の場合あり）
+        data_type: numeric(10, 2)
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: profit_margin
+        description: 現時点の利益率（百分率）
+        data_type: numeric(10, 2)
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: stock_quantity
+        description: 在庫数量
+        data_type: integer
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: is_active
+        description: アクティブフラグ
+        data_type: boolean
+        config:
+          meta:
+            dimension:
+              type: boolean
+      - name: total_sold_quantity
+        description: 総販売数量（キャンセル・返金を除く）
+        data_type: bigint
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number
+      - name: total_revenue
+        description: 総売上（キャンセル・返金を除く、order_details.line_total ベース）
+        data_type: numeric(15, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            metrics:
+              sum_total_revenue:
+                label: 総売上
+                description: 商品の総売上
+                type: sum
+            dimension:
+              type: number
+      - name: total_profit
+        description: |
+          総利益（キャンセル・返金を除く）。
+          計算式は `(order_details.unit_price - products.cost) * order_details.quantity` の合計で、
+          販売価格は「販売時点の単価」(order_details.unit_price)、原価は「現時点の原価」(products.cost) を用いる。
+          このため、商品マスタの cost が後から変更されると、過去の販売分の total_profit も
+          再計算されて巻き戻る点に注意（unit_price 側は order_details に固定されているため巻き戻らない）。
+          cost が NULL の商品は当該明細の利益を 0 として扱う。
+        data_type: numeric(15, 2)
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            metrics:
+              sum_total_profit:
+                label: 総利益
+                description: 商品の総利益
+                type: sum
+            dimension:
+              type: number
+      - name: total_orders
+        description: 総注文数（キャンセル・返金を除く）
+        data_type: bigint
+        constraints:
+          - type: not_null
+        config:
+          meta:
+            dimension:
+              type: number

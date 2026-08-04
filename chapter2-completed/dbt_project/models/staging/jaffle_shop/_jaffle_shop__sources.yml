@@ -1,0 +1,40 @@
+version: 2
+
+sources:
+  - name: jaffle_shop
+    description: "Jaffle Shopの業務データ"
+    schema: jaffle_shop_ch2_raw
+    tables:
+      - name: raw_customers
+        description: "顧客マスターデータ"
+        columns:
+          - name: id
+            description: "顧客ID（UUID）"
+          - name: name
+            description: "顧客名"
+      - name: raw_orders
+        description: "注文トランザクションデータ"
+        columns:
+          - name: id
+            description: "注文ID（UUID）"
+          - name: customer
+            description: "顧客ID（UUID、外部キー）"
+          - name: ordered_at
+            description: "注文日時（ISO 8601形式）"
+          - name: store_id
+            description: "店舗ID（UUID）"
+          - name: subtotal
+            description: "小計金額（セント単位）"
+          - name: tax_paid
+            description: "税額（セント単位）"
+          - name: order_total
+            description: "合計金額（セント単位）"
+      - name: raw_items
+        description: "注文明細データ"
+        columns:
+          - name: id
+            description: "注文明細ID（UUID）"
+          - name: order_id
+            description: "注文ID（UUID、外部キー）"
+          - name: sku
+            description: "商品コード（例：JAF-001, BEV-003）"

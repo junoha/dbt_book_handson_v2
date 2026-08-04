@@ -1,0 +1,14 @@
+[project]
+name = "dbt-book-ch7"
+version = "0.1.0"
+description = "第7章ハンズオン: レイクハウスにおけるdbtの活用"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "boto3>=1.40.11",
+    "dbt-athena>=1.10,<1.11",
+    "dbt-core>=1.10,<1.11",
+    "dbt-glue>=1.10,<1.11",
+    "dbt-loom>=0.9.0",
+    "jafgen>=0.3.0",
+]

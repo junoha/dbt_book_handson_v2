@@ -1,0 +1,8 @@
+.venv/
+target/
+dbt_packages/
+logs/
+edr_target/
+.user.yml
+jaffle-data/
+mwaa/dags/jafgen_data/

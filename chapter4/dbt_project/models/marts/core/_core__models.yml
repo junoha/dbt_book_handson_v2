@@ -1,0 +1,394 @@
+version: 2
+
+models:
+  - name: base_dim_customers
+    description: |
+      ### Grain
+      1 row per customer_id（最新断面のみ）
+
+      ### 役割
+      snapshot_dim_customers の入力となる「顧客の最新断面」テーブル。
+      int_customers_with_address（顧客 + デフォルト住所の結合結果）から
+      ビジネスに必要な変換処理を適用した最新状態を提供する。
+
+      ### SCD Type 2 との関係
+      このテーブルは「最新状態のみ」を保持し、サロゲートキーや
+      valid_from / valid_to などの履歴管理フィールドは持たない。
+      履歴管理は下流の snapshot（snapshot_dim_customers）が担当する。
+
+      ### Business process
+      Customer relationship management
+    columns:
+      - name: customer_id
+        description: "顧客ID（ナチュラルキー、snapshot の unique_key）"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_name
+        description: "顧客名"
+      - name: email
+        description: "メールアドレス"
+      - name: customer_status
+        description: "顧客ステータス"
+      - name: prefecture
+        description: "都道府県"
+      - name: region
+        description: "地域区分"
+      - name: updated_at
+        description: "ソース側の最終更新日時（snapshot の timestamp strategy で使用）"
+        data_tests:
+          - not_null
+
+  - name: base_dim_products
+    description: |
+      ### Grain
+      1 row per product_id（最新断面のみ）
+
+      ### 役割
+      snapshot_dim_products の入力となる「商品の最新断面」テーブル。
+      int_products_with_category_and_supplier（商品 + カテゴリ + 仕入先の
+      結合結果）からビジネスに必要な変換処理を適用した最新状態を提供する。
+
+      ### SCD Type 2 との関係
+      このテーブルは「最新状態のみ」を保持し、サロゲートキーや
+      valid_from / valid_to などの履歴管理フィールドは持たない。
+      履歴管理は下流の snapshot（snapshot_dim_products）が担当する。
+
+      ### Business process
+      Product catalog management
+    columns:
+      - name: product_id
+        description: "商品ID（ナチュラルキー、snapshot の unique_key）"
+        data_tests:
+          - not_null
+          - unique
+      - name: product_name
+        description: "商品名"
+      - name: unit_price
+        description: "単価"
+      - name: price_tier
+        description: "価格帯区分"
+      - name: category_id
+        description: "カテゴリID"
+      - name: category_name
+        description: "カテゴリ名"
+      - name: supplier_id
+        description: "仕入先ID"
+      - name: supplier_name
+        description: "仕入先名"
+      - name: updated_at
+        description: "ソース側の最終更新日時（snapshot の timestamp strategy で使用）"
+        data_tests:
+          - not_null
+
+  - name: dim_customers
+    description: |
+      ### Grain
+      1 row per customer_id per validity period
+      （同じ customer_id でも有効期間ごとに複数レコードが存在する SCD Type 2）
+
+      ### Business process
+      顧客マスタのディメンション。snapshot_dim_customers（base_dim_customers
+      の SCD Type 2 履歴）を参照し、snapshot が自動生成したメタデータ
+      （dbt_scd_id / dbt_valid_from / dbt_valid_to）をビジネス向けの命名
+      （customer_key / valid_from / valid_to）に整形する。
+
+      ### SCD Type 2 の動作
+      現在有効なレコードは valid_to = '9999-12-31'（snapshot の
+      dbt_valid_to_current 設定）。fct 側からは注文日が
+      valid_from <= order_date < valid_to の期間に該当する
+      バージョンと JOIN される。
+    columns:
+      - name: customer_key
+        description: "顧客サロゲートキー（snapshot の dbt_scd_id をエイリアス）"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_id
+        description: "顧客ID（ナチュラルキー、同じ ID で複数バージョンあり）"
+        data_tests:
+          - not_null
+      - name: customer_name
+        description: "顧客名（バージョン時点）"
+      - name: email
+        description: "メールアドレス（バージョン時点）"
+      - name: customer_status
+        description: "顧客ステータス（バージョン時点）"
+      - name: prefecture
+        description: "都道府県（バージョン時点）"
+      - name: region
+        description: "地域区分（バージョン時点）"
+      - name: valid_from
+        description: "このバージョンが有効になった日時"
+        data_tests:
+          - not_null
+      - name: valid_to
+        description: "このバージョンが無効になった日時（現在有効は '9999-12-31'）"
+        data_tests:
+          - not_null
+
+  - name: dim_products
+    description: |
+      ### Grain
+      1 row per product_id per validity period
+      （同じ product_id でも有効期間ごとに複数レコードが存在する SCD Type 2）
+
+      ### Business process
+      商品マスタのディメンション。snapshot_dim_products を参照し、
+      snapshot が自動生成したメタデータ（dbt_scd_id / dbt_valid_from /
+      dbt_valid_to）をビジネス向けの命名（product_key / valid_from /
+      valid_to）に整形する。
+
+      ### SCD Type 2 の動作
+      現在有効なレコードは valid_to = '9999-12-31'。fct 側からは注文日が
+      valid_from <= order_date < valid_to の期間に該当するバージョンと JOIN される。
+    columns:
+      - name: product_key
+        description: "商品サロゲートキー（snapshot の dbt_scd_id をエイリアス）"
+        data_tests:
+          - not_null
+          - unique
+      - name: product_id
+        description: "商品ID（ナチュラルキー、同じ ID で複数バージョンあり）"
+        data_tests:
+          - not_null
+      - name: product_name
+        description: "商品名（バージョン時点）"
+      - name: unit_price
+        description: "単価（バージョン時点、価格改定が発生した場合も当時の価格が保持される）"
+      - name: price_tier
+        description: "価格帯区分（バージョン時点）"
+      - name: category_id
+        description: "カテゴリID"
+      - name: category_name
+        description: "カテゴリ名"
+      - name: supplier_id
+        description: "仕入先ID"
+      - name: supplier_name
+        description: "仕入先名"
+      - name: valid_from
+        description: "このバージョンが有効になった日時"
+        data_tests:
+          - not_null
+      - name: valid_to
+        description: "このバージョンが無効になった日時（現在有効は '9999-12-31'）"
+        data_tests:
+          - not_null
+
+  - name: dim_dates
+    description: |
+      ### Grain
+      1 row per date_day（dbt_project.yml の vars.start_date 〜 vars.end_date）
+
+      ### Business process
+      日付ディメンション。dbt_utils.date_spine マクロで日付系列を生成し、
+      年月日・四半期・曜日・平日休日フラグ・会計年度（4 月始まり）などの
+      属性を付与する。複数のファクトが date_key で結合する共通ディメンション。
+
+      ### SCD Type 2 との違い
+      dim_dates は SCD Type 2 の対象外。日付という概念は時間とともに
+      変化しないため、snapshot は不要。
+    columns:
+      - name: date_key
+        description: "日付サロゲートキー（date_day そのまま、ファクトの date_key と結合）"
+        data_tests:
+          - not_null
+          - unique
+      - name: date_day
+        description: "日付"
+        data_tests:
+          - not_null
+      - name: year
+        description: "年"
+      - name: month
+        description: "月（1〜12）"
+      - name: day
+        description: "月内日（1〜31）"
+      - name: quarter
+        description: "四半期（暦上の 1〜4）"
+      - name: day_of_week
+        description: "曜日番号（0=日曜 〜 6=土曜、PostgreSQL の extract(dow) と同じ）"
+      - name: day_of_year
+        description: "1 月 1 日からの通算日（1〜366）"
+      - name: week_of_year
+        description: "ISO 週番号（1〜53）"
+      - name: day_name
+        description: "曜日名の日本語表記（日曜日 〜 土曜日）"
+      - name: month_name
+        description: "月名の日本語表記（1月 〜 12月）"
+      - name: quarter_name
+        description: "暦上の四半期名（Q1 〜 Q4）"
+      - name: weekday_flag
+        description: "平日・休日区分（平日 / 休日）"
+      - name: is_month_start
+        description: "月初フラグ（その月の 1 日のとき true）"
+      - name: is_month_end
+        description: "月末フラグ（その月の最終日のとき true）"
+      - name: fiscal_year
+        description: "会計年度（4 月始まり、4〜12 月は当年、1〜3 月は前年扱い）"
+      - name: fiscal_quarter
+        description: "会計年度の四半期（1: 4〜6 月 / 2: 7〜9 月 / 3: 10〜12 月 / 4: 1〜3 月）"
+
+  - name: fct_orders
+    description: |
+      ### Grain
+      1 row per order_id（注文ヘッダー単位）
+
+      ### Business process
+      EC サイトでの注文確定。int_orders_with_items（明細集約）と
+      int_orders_with_payment_shipment（支払・配送）を結合し、
+      ディメンションキー（customer_key / date_key）を付与した注文粒度のファクト。
+
+      ### SCD Type 2 対応 JOIN
+      dim_customers は SCD Type 2 のため、customer_id + order_date の期間マッチで
+      JOIN する（order_date >= valid_from and order_date < valid_to）。
+      これにより注文時点の顧客属性がファクトに紐づく。
+
+      ### 主要メジャー
+      注文金額、明細集約（数量・金額の min/max/avg）、支払集約（決済件数・
+      成功フラグ）、配送集約（発送・配送完了フラグ・リードタイム）、
+      充足ステータス（fulfillment_status）など、注文に関する全メトリクスの
+      single source of truth。
+    columns:
+      - name: order_id
+        description: "注文ID（粒度キー、OLTP の order_id）"
+        data_tests:
+          - not_null
+          - unique
+      - name: order_number
+        description: "注文番号（業務キー）"
+      - name: order_date
+        description: "注文日"
+        data_tests:
+          - not_null
+      - name: customer_id
+        description: |
+          顧客ID（ナチュラルキー）。dim_customers の SCD Type 2 でバージョンごとに振られる
+          customer_key とは別に、永続的な業務キーをファクトに残している。
+          customer_key は注文時点の顧客属性での分析（例: 注文日時点の住所別売上）、
+          customer_id は同一顧客の全期間を横断した分析（例: 顧客生涯購入回数・LTV）で
+          それぞれ使い分ける。属性をコピーしない正規化原則とは別の、外部キーとしての位置づけ。
+        data_tests:
+          - not_null
+      - name: customer_key
+        description: "注文時点の顧客ディメンションキー（SCD Type 2 対応、dim_customers の customer_key への外部キー）"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+      - name: date_key
+        description: "日付サロゲートキー（dim_dates への外部キー）"
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_dates')
+                field: date_key
+      - name: total_amount
+        description: "注文合計金額（ヘッダー）"
+      - name: item_count
+        description: "明細数"
+      - name: items_total
+        description: "明細合計金額"
+      - name: payment_count
+        description: "決済件数"
+      - name: total_paid_amount
+        description: "支払い完了金額合計"
+      - name: has_completed_payment
+        description: "決済完了フラグ"
+      - name: shipment_count
+        description: "配送件数"
+      - name: earliest_shipped_date
+        description: "最早発送日"
+      - name: latest_delivery_date
+        description: "最新配送完了日"
+      - name: fulfillment_status
+        description: "総合フルフィルメントステータス"
+      - name: is_total_consistent
+        description: "注文ヘッダー subtotal と明細合計 items_total の整合性フラグ"
+
+  - name: fct_order_items
+    description: |
+      ### Grain
+      1 row per order_item_id（注文明細単位）
+
+      ### Business process
+      EC サイトでの注文明細の確定。商品別売上ランキングや ABC 分析など、
+      明細レベルの分析に使用するファクト。
+
+      ### SCD Type 2 対応 JOIN
+      dim_customers / dim_products は SCD Type 2 のため、order_date の
+      期間マッチで JOIN する（order_date >= valid_from and order_date < valid_to）。
+      これにより注文時点の顧客・商品属性がファクトに紐づく。
+
+      ### fct_orders との関係
+      同じビジネスプロセス（注文）を別粒度（明細）で保持する。日別売上や
+      顧客別注文数は fct_orders、商品別の詳細分析は fct_order_items を使う。
+    columns:
+      - name: order_item_id
+        description: "注文明細ID（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: "注文ID（fct_orders への外部キー）"
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+      - name: product_id
+        description: "商品ID（ナチュラルキー）"
+        data_tests:
+          - not_null
+      - name: order_date
+        description: "注文日"
+        data_tests:
+          - not_null
+      - name: customer_id
+        description: |
+          顧客ID（ナチュラルキー）。dim_customers の SCD Type 2 でバージョンごとに振られる
+          customer_key とは別に、永続的な業務キーをファクトに残している。
+          customer_key は注文時点の顧客属性での分析（例: 注文日時点の住所別売上）、
+          customer_id は同一顧客の全期間を横断した分析（例: 顧客生涯購入回数・LTV）で
+          それぞれ使い分ける。属性をコピーしない正規化原則とは別の、外部キーとしての位置づけ。
+        data_tests:
+          - not_null
+      - name: customer_key
+        description: "注文時点の顧客ディメンションキー（SCD Type 2 対応、dim_customers の customer_key への外部キー）"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+      - name: product_key
+        description: "注文時点の商品ディメンションキー（SCD Type 2 対応）"
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_key
+      - name: date_key
+        description: "日付サロゲートキー（dim_dates への外部キー）"
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_dates')
+                field: date_key
+      - name: quantity
+        description: "数量"
+        data_tests:
+          - not_null
+      - name: unit_price
+        description: "単価"
+        data_tests:
+          - not_null
+      - name: line_total
+        description: "明細合計（quantity×unit_price）"
+        data_tests:
+          - not_null
+      - name: quantity_type
+        description: "数量タイプ（single, multiple）"

@@ -1,0 +1,201 @@
+version: 2
+
+models:
+  - name: stg_zakka_mall__customers
+    description: |
+      顧客 Staging モデル。
+      ソースデータのクレンジングと標準化を行う。
+    columns:
+      - name: customer_id
+        description: "顧客ID"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_name
+        description: "顧客名"
+        data_tests:
+          - not_null
+      - name: email
+        description: "メールアドレス"
+      - name: customer_status
+        description: "顧客ステータス"
+      - name: is_valid_record
+        description: "データ品質フラグ"
+
+  - name: stg_zakka_mall__customer_addresses
+    description: |
+      顧客住所 Staging モデル。
+      住所データのクレンジングと地域区分の付与を行う。
+    columns:
+      - name: address_id
+        description: "住所ID"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_id
+        description: "顧客ID"
+        data_tests:
+          - not_null
+      - name: prefecture
+        description: "都道府県"
+        data_tests:
+          - not_null
+      - name: city
+        description: "市区町村"
+        data_tests:
+          - not_null
+      - name: full_address
+        description: "完全住所"
+      - name: region
+        description: "地域区分（北海道、東北、関東、中部、関西、中国、四国、九州・沖縄）"
+      - name: is_default
+        description: "デフォルト住所フラグ"
+      - name: is_valid_record
+        description: "データ品質フラグ（postal_code / prefecture / city / address_line1 が必須）"
+
+  - name: stg_zakka_mall__products
+    description: |
+      商品 Staging モデル。
+      ソースデータのクレンジングと価格帯区分の付与を行う。
+    columns:
+      - name: product_id
+        description: "商品ID"
+        data_tests:
+          - not_null
+          - unique
+      - name: product_code
+        description: "商品コード"
+        data_tests:
+          - not_null
+      - name: product_name
+        description: "商品名"
+        data_tests:
+          - not_null
+      - name: category_id
+        description: "カテゴリID"
+      - name: supplier_id
+        description: "仕入先ID"
+      - name: unit_price
+        description: "単価"
+      - name: price_tier
+        description: "価格帯区分（low, medium, high, premium）"
+      - name: is_valid_record
+        description: "データ品質フラグ"
+
+  - name: stg_zakka_mall__categories
+    description: |
+      カテゴリ Staging モデル。
+      商品カテゴリマスタのクレンジングを行う。
+    columns:
+      - name: category_id
+        description: "カテゴリID"
+        data_tests:
+          - not_null
+          - unique
+      - name: category_code
+        description: "カテゴリコード"
+        data_tests:
+          - not_null
+      - name: category_name
+        description: "カテゴリ名"
+        data_tests:
+          - not_null
+      - name: parent_category_id
+        description: "親カテゴリID"
+      - name: category_path
+        description: "カテゴリ階層パス"
+      - name: is_active
+        description: "有効フラグ"
+      - name: is_valid_record
+        description: "データ品質フラグ"
+
+  - name: stg_zakka_mall__suppliers
+    description: |
+      仕入先 Staging モデル。
+      仕入先マスタのクレンジングを行う。
+    columns:
+      - name: supplier_id
+        description: "仕入先ID"
+        data_tests:
+          - not_null
+          - unique
+      - name: supplier_code
+        description: "仕入先コード"
+        data_tests:
+          - not_null
+      - name: supplier_name
+        description: "仕入先名"
+        data_tests:
+          - not_null
+      - name: contact_email
+        description: "担当者メールアドレス"
+      - name: contact_phone
+        description: "担当者電話番号"
+      - name: address
+        description: "住所"
+      - name: supplier_status
+        description: "仕入先ステータス"
+      - name: is_valid_record
+        description: "データ品質フラグ"
+
+  - name: stg_zakka_mall__orders
+    description: |
+      注文 Staging モデル。
+      注文データのクレンジングと注文サイズセグメントの付与を行う。
+    columns:
+      - name: order_id
+        description: "注文ID"
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_id
+        description: "顧客ID"
+        data_tests:
+          - not_null
+      - name: order_date
+        description: "注文日"
+        data_tests:
+          - not_null
+      - name: order_status
+        description: "注文ステータス"
+      - name: total_amount
+        description: "注文合計金額"
+      - name: order_size_segment
+        description: "注文サイズセグメント（small, medium, large, extra_large）"
+      - name: is_valid_record
+        description: "データ品質フラグ"
+
+  - name: stg_zakka_mall__order_items
+    description: |
+      注文明細 Staging モデル。
+      注文明細データのクレンジングを行う。
+    columns:
+      - name: order_item_id
+        description: "注文明細ID"
+        data_tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: "注文ID"
+        data_tests:
+          - not_null
+      - name: product_id
+        description: "商品ID"
+        data_tests:
+          - not_null
+      - name: quantity
+        description: "数量"
+        data_tests:
+          - not_null
+      - name: unit_price
+        description: "単価"
+        data_tests:
+          - not_null
+      - name: line_total
+        description: "明細合計"
+        data_tests:
+          - not_null
+      - name: quantity_type
+        description: "数量タイプ（single, multiple）"
+      - name: is_valid_record
+        description: "データ品質フラグ"

@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+  # S3 Bucket for MWAA
+  S3BucketMWAA:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-mwaa"
+      VersioningConfiguration:
+        Status: Enabled
+
+  # S3 Bucket for Athena
+  S3BucketAthena:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-athena"
+
+  # Athena Work Group
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-workgroup"
+      Description: "Work group for dbt project"
+      State: ENABLED
+      RecursiveDeleteOption: true
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub "s3://${S3BucketAthena}/query-results/"
+
+Outputs:
+  S3BucketMWAA:
+    Description: "S3 Bucket for MWAA"
+    Value: !Ref S3BucketMWAA
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketMWAA"
+
+  S3BucketAthena:
+    Description: "S3 Bucket for Athena"
+    Value: !Ref S3BucketAthena
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketAthena"
+
+  AthenaWorkGroup:
+    Description: "Athena Work Group name"
+    Value: !Ref AthenaWorkGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-AthenaWorkGroup"

@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+  S3BucketAthena:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-${AWS::Region}"
+
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub "${AWS::StackName}-workgroup"
+      State: ENABLED
+      RecursiveDeleteOption: true
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: false
+        ResultConfiguration:
+          OutputLocation: !Sub "s3://${S3BucketAthena}/query-results/"
+
+Outputs:
+  S3BucketAthena:
+    Value: !Ref S3BucketAthena
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketAthena"
+
+  S3BucketAthenaArn:
+    Value: !GetAtt S3BucketAthena.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketAthenaArn"
+
+  AthenaWorkGroup:
+    Value: !Ref AthenaWorkGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-AthenaWorkGroup"

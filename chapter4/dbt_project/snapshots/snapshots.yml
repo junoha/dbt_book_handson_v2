@@ -1,0 +1,36 @@
+snapshots:
+  - name: snapshot_dim_customers
+    description: |
+      顧客ディメンションの SCD Type 2 履歴管理。
+      base_dim_customers（顧客 + デフォルト住所の最新断面）の変更を時系列で追跡する。
+      ビジネスプロセスのうち顧客属性の変化（氏名変更、メール変更、住所変更など）を完全に保持し、
+      dim_customers で BI 向けのクリーンなスキーマに整形される。
+    relation: ref('base_dim_customers')
+    config:
+      schema: snapshots
+      unique_key: customer_id
+      strategy: timestamp
+      updated_at: updated_at
+      hard_deletes: invalidate
+      dbt_valid_to_current: "cast('9999-12-31' as timestamp)"
+      tags:
+        - snapshot
+        - scd_type_2
+
+  - name: snapshot_dim_products
+    description: |
+      商品ディメンションの SCD Type 2 履歴管理。
+      base_dim_products（商品 + カテゴリ + 仕入先の最新断面）の変更を時系列で追跡する。
+      商品の価格変更、ステータス変更、カテゴリ変更などを完全に保持し、
+      dim_products で BI 向けのクリーンなスキーマに整形される。
+    relation: ref('base_dim_products')
+    config:
+      schema: snapshots
+      unique_key: product_id
+      strategy: timestamp
+      updated_at: updated_at
+      hard_deletes: invalidate
+      dbt_valid_to_current: "cast('9999-12-31' as timestamp)"
+      tags:
+        - snapshot
+        - scd_type_2

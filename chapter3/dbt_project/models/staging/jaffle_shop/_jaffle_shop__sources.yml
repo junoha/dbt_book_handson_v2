@@ -1,0 +1,87 @@
+version: 2
+
+sources:
+  - name: jaffle_shop
+    description: |
+      - **目的**: ハンズオン用 Jaffle Shop (架空の EC サイト) の生データ群。
+      - **上流システム**: スクリプトによる CSV ロード (擬似 EC サイトのトランザクションを模したサンプル)。
+      - **取り込み方式**: 日次フルリフレッシュ (ハンズオン想定)。loaded_at をレコード投入時刻として付与。
+      - **オーナー**: dbt book team (dbt-book-team@example.com)
+    schema: jaffle_shop_ch3_raw
+    tables:
+      - name: raw_customers
+        description: |
+          - **目的**: 顧客マスタの生データ。EC サイト登録時の氏名を保持する。
+          - **粒度**: 1 行 1 顧客
+        columns:
+          - name: id
+            data_tests:
+              - unique
+              - not_null
+          - name: name
+          - name: loaded_at
+            description: '{{ doc("column__loaded_at") }}'
+
+      - name: raw_orders
+        description: |
+          - **目的**: 注文トランザクションの生データ。注文単位の合計金額と発生時刻を保持する。
+          - **粒度**: 1 行 1 注文 (注文ヘッダ)
+        columns:
+          - name: id
+            data_tests:
+              - unique
+              - not_null
+          - name: customer
+            data_tests:
+              - name: relationships_raw_orders_customer
+                test_name: relationships
+                arguments:
+                  to: source('jaffle_shop', 'raw_customers')
+                  field: id
+          - name: ordered_at
+          - name: store_id
+          - name: subtotal
+          - name: tax_paid
+          - name: order_total
+          - name: loaded_at
+            description: '{{ doc("column__loaded_at") }}'
+
+      - name: raw_items
+        description: |
+          - **目的**: 注文明細の生データ。注文と商品の多対多を展開する中間テーブル。
+          - **粒度**: 1 行 1 明細 (1 注文に複数明細が存在しうる)
+        columns:
+          - name: id
+            data_tests:
+              - unique
+              - not_null
+          - name: order_id
+          - name: sku
+          - name: loaded_at
+            description: '{{ doc("column__loaded_at") }}'
+
+      - name: raw_products
+        description: |
+          - **目的**: 商品マスタの生データ。ジャッフル (フード) とビバレッジ (ドリンク) の販売単価と説明文を保持する。
+          - **粒度**: 1 行 1 SKU
+        columns:
+          - name: sku
+            data_tests:
+              - unique
+              - not_null
+          - name: name
+          - name: type
+          - name: price
+          - name: description
+          - name: loaded_at
+            description: '{{ doc("column__loaded_at") }}'
+    config:
+      loaded_at_field: loaded_at
+      freshness:
+        warn_after: {count: 24, period: hour}
+        error_after: {count: 48, period: hour}
+      meta:
+        owner: dbt book team
+        owner_email: dbt-book-team@example.com
+        upstream_system: handson_load_script
+        load_frequency: daily

@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: jaffle_shop_iceberg
+    tables:
+      - name: raw_customers
+        description: 顧客の生データ
+        columns:
+          - name: id
+          - name: name
+          - name: gdpr_deleted
+            description: データ保護ポリシーに基づく削除対象かどうかを表すフラグ（Step 2のスキーマ進化で追加される列）
+
+      - name: raw_orders
+        description: 注文の生データ
+        columns:
+          - name: id
+          - name: customer
+          - name: ordered_at
+          - name: store_id
+          - name: subtotal
+          - name: tax_paid
+          - name: order_total
+          - name: coupon_discount
+            description: クーポン利用金額（Step 3のスキーマ進化で追加される列）

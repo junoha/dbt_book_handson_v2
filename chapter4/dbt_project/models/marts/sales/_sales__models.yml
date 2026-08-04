@@ -1,0 +1,138 @@
+version: 2
+
+models:
+  - name: sales_summary
+    description: |
+      ### Grain
+      1 row per date_key（日次の売上サマリ）
+
+      ### Business process
+      日次売上トレンド・移動平均・前日比を可視化する経営分析マート。
+      dim_dates を軸に fct_orders / fct_order_items を集約し、
+      7 日移動平均・30 日移動平均・前日比などを付与する。
+
+      ### 主要 KPI
+      注文件数、ユニーク顧客数、売上合計、平均注文金額、ユニーク商品数、
+      7 日・30 日移動平均。BI ツールで日次ダッシュボードを構築する前提。
+    columns:
+      - name: date_key
+        description: "日付サロゲートキー（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: year
+        description: "年"
+      - name: month
+        description: "月"
+      - name: quarter
+        description: "四半期"
+      - name: order_count
+        description: "注文件数"
+      - name: customer_count
+        description: "ユニーク顧客数"
+      - name: total_sales
+        description: "売上合計（注文合計金額の総和）"
+      - name: avg_order_value
+        description: "平均注文金額"
+      - name: unique_products_sold
+        description: "ユニーク販売商品数"
+      - name: total_quantity_sold
+        description: "総販売数量"
+      - name: sales_7day_avg
+        description: "7 日移動平均売上"
+      - name: sales_30day_avg
+        description: "30 日移動平均売上"
+
+  - name: product_performance
+    description: |
+      ### Grain
+      1 row per product_id（SCD Type 2 の全期間を集約した商品単位、最新バージョンの属性で表示）
+
+      ### Business process
+      商品別の売上ランキング・ABC 分析・ライフサイクル分類を行う
+      マーチャンダイジング向け分析マート。dim_products×fct_order_items を
+      商品単位に集計する。
+
+      ### 主要 KPI
+      売上ランキング、数量ランキング、顧客ランキング、ABC カテゴリ
+      （A: 上位 20%、B: 中位 30%、C: 下位 50%）、ライフサイクル
+      （Active / Declining / At Risk / Inactive）。
+    columns:
+      - name: product_id
+        description: "商品業務キー（粒度キー）"
+        data_tests:
+          - not_null
+          - unique
+      - name: product_name
+        description: "商品名"
+      - name: category_name
+        description: "カテゴリ名"
+      - name: supplier_name
+        description: "仕入先名"
+      - name: order_count
+        description: "注文件数（この商品が含まれた注文の数）"
+      - name: total_quantity_sold
+        description: "総販売数量"
+      - name: total_sales
+        description: "売上合計"
+      - name: unique_customers
+        description: "この商品を購入したユニーク顧客数"
+      - name: sales_rank
+        description: "売上ランキング（1 が最上位）"
+      - name: abc_category
+        description: "ABC 分析カテゴリ（A: 上位 20%、B: 中位 30%、C: 下位 50%）"
+      - name: product_lifecycle_stage
+        description: "商品ライフサイクル（Active / Declining / At Risk / Inactive）"
+      - name: days_since_last_sale
+        description: "最終販売からの経過日数"
+
+  - name: sales_obt
+    description: |
+      ### Grain
+      1 row per order_item_id（注文明細単位）
+
+      ### Business process
+      包括的な売上分析用の One Big Table（OBT）。fct_order_items を軸に
+      fct_orders と全ディメンションを結合し、分析に必要なあらゆる属性と
+      派生セグメントを幅広く保持する。BI ツールでセルフサービス分析の基盤。
+
+      ### 責務分担
+      正規化されたスタースキーマ（fct_orders / dim_*）の上に、
+      セルフサービス分析の利便性を優先したワイドテーブルを提供する。
+      dbt 公式が Semantic Layer 未導入時に推奨する denormalized marts の考え方
+      に近い。
+    columns:
+      - name: order_id
+        description: "注文ID"
+        data_tests:
+          - not_null
+      - name: order_date
+        description: "注文日"
+        data_tests:
+          - not_null
+      - name: customer_id
+        description: "顧客業務キー"
+        data_tests:
+          - not_null
+      - name: product_id
+        description: "商品業務キー"
+        data_tests:
+          - not_null
+      - name: quantity
+        description: "注文明細数量"
+      - name: line_total
+        description: "明細合計金額"
+      - name: customer_name
+        description: "顧客名"
+      - name: customer_region
+        description: "顧客の地域区分"
+      - name: product_name
+        description: "商品名"
+      - name: category_name
+        description: "カテゴリ名"
+      - name: order_value_segment
+        description: "注文金額セグメント（High / Medium / Low）"
+      - name: purchase_pattern
+        description: "購入パターン（Bulk / Multiple / Single）"
+      - name: price_change_percent
+        description: "商品定価に対する注文時単価の変動率（%）"
