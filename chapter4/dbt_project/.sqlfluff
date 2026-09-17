@@ -1,8 +1,10 @@
 # dbt v2 に内蔵の `dbt lint` / `dbt format` が読む設定。
 # sqlfluff と互換のフォーマットなので、v1 版の .sqlfluff をほぼそのまま流用できる。
-# ただし sqlfluff-templater-dbt 用の [sqlfluff:templater:dbt] セクションは不要になったため削除し、
-# dialect は postgres から duckdb に変更している。
+# ただし sqlfluff-templater-dbt 用の [sqlfluff:templater:dbt] セクション（project_dir など）は
+# 不要になったため削除し、dialect は postgres から duckdb に変更している。
+# templater = dbt は残す（v2 が対応するのは dbt テンプレータのみで、省略すると jinja 扱いで警告になる）。
 [sqlfluff]
+templater = dbt
 dialect = duckdb
 sql_file_exts = .sql
 max_line_length = 100
