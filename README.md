@@ -20,7 +20,7 @@
 | [`chapter5/`](chapter5/README.md) | 第 5 章 データ品質管理の実践 | テスト・Model Contracts・Elementary・dbt-osmosis で品質管理体制を作る | PostgreSQL 17（`dbt-postgres`）、Elementary、dbt-osmosis | ローカル（Docker） |
 | [`chapter6/`](chapter6/README.md) | 第 6 章 ワークフローエンジンによる dbt の運用 | Apache Airflow から dbt とその前後処理を含むワークフローを運用する | Amazon MWAA、Amazon Athena | AWS |
 | [`chapter7/`](chapter7/README.md) | 第 7 章 レイクハウスにおける dbt の活用 | Apache Iceberg でレイクハウスを構築し、別エンジンからの参照まで扱う | Amazon Athena（`dbt-athena`）、AWS Glue（`dbt-glue`）、dbt-loom | AWS |
-| [`appendixA/`](appendixA/README.md) | 付録 A セマンティックレイヤーの紹介 | MetricFlow のセマンティックモデルとメトリクスを定義し、`mf` CLI でクエリする | PostgreSQL（`dbt-postgres`）、MetricFlow | ローカル（Docker） |
+| [`appendixA/`](appendixA/README.md) | 付録 A セマンティックレイヤーの紹介 | MetricFlow のセマンティックモデルとメトリクスを定義し、`mf` CLI でクエリする | DuckDB（dbt v2 内蔵アダプタ）、MetricFlow | ローカル |
 
 第 1 章・第 8 章・付録 B・付録 C には手を動かすハンズオンがないため、このリポジトリには含めていません。
 
@@ -105,12 +105,12 @@ $env:AWS_DEFAULT_REGION = "ap-northeast-1"
 [公式ドキュメント](https://docs.aws.amazon.com/ja_jp/cost-management/latest/userguide/budgets-create.html)を参照し、AWS コンソールの Billing セクションから、月額利用料が一定額を超えた場合にメール通知を受け取る設定を行ってください。
 まずは月額 10 ドルを目安にアラームを設定するとよいでしょう。
 
-### Docker を使う章（第 5 章・付録 A）
+### Docker を使う章（第 5 章）
 
-これらの章では、手元の Docker 上で PostgreSQL を起動してデータベースとして使います。
+この章では、手元の Docker 上で PostgreSQL を起動してデータベースとして使います。
 [Docker Desktop](https://docs.docker.com/get-started/get-docker/) など、`docker compose` が実行できる環境をインストールしてください。
 
-各ハンズオンのディレクトリで `docker compose up -d` を実行するとデータベースが起動し、初期化スクリプトでスキーマとサンプルデータが自動投入されます。
+章のディレクトリで `docker compose up -d` を実行するとデータベースが起動し、初期化スクリプトでスキーマとサンプルデータが自動投入されます。
 
 ## 各ハンズオンの進め方
 
@@ -131,7 +131,7 @@ cd chapter5                   # 進める章のディレクトリ
 docker compose up -d
 ```
 
-第 4 章は Docker も Python も使いません。dbt v2（単一バイナリ）と DuckDB CLI だけで進めます。詳細は [`chapter4/README.md`](chapter4/README.md) を参照してください。
+第 4 章と付録 A は Docker を使いません。dbt v2（単一バイナリ）と DuckDB CLI で進めます（付録 A はメトリクスをクエリする `mf` CLI のために uv も使います）。詳細は [`chapter4/README.md`](chapter4/README.md) と [`appendixA/README.md`](appendixA/README.md) を参照してください。
 
 以降の手順（CloudFormation のデプロイ、`uv sync`、`dbt run` など）は各章の README に従ってください。
 
@@ -141,7 +141,7 @@ docker compose up -d
 第 7 章のみ、dbt-glue の対応状況に合わせて dbt Core 1.10 系を使います。
 各章の Python 依存は `pyproject.toml` に固定しているため、`uv sync` すればその章に合ったバージョンが入ります。
 
-第 4 章のみ dbt v2（Rust 版、2.0.4 以上）を使います。Python パッケージではなく単一バイナリのため `uv sync` は不要です。
+第 4 章と付録 A では dbt v2（Rust 版、2.0.4 以上）を使います。Python パッケージではなく単一バイナリのため、第 4 章では `uv sync` は不要です。付録 A も dbt 本体はバイナリですが、メトリクスのクエリに使う MetricFlow（`mf`）が Python パッケージのため `uv sync` が必要です。
 
 ## クリーンアップと費用管理
 
@@ -149,3 +149,4 @@ docker compose up -d
 
 - **AWS を使う章**：各章の `utils/delete_resources.py`、または CloudFormation スタックの削除でリソースを一括削除できます。Athena・Glue・Redshift Serverless は使った分だけの従量課金のため、削除すれば以降の課金は発生しません。
 - **Docker を使う章**：章のディレクトリで `docker compose down`（データも消す場合は `docker compose down -v`）を実行します。
+- **第 4 章・付録 A**：`dbt clean` と DuckDB のデータベースファイル（`dbt_demo.duckdb`）の削除で完了します。

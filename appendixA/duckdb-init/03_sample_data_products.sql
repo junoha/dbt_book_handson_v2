@@ -1,8 +1,15 @@
 /*
+v1 版（PostgreSQL）の init-scripts/03_sample_data_products.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 2 点のみ。
+  - ALTER TABLE ... DISABLE/ENABLE TRIGGER を削除（DuckDB にトリガーは無い）
+  - SET TimeZone = 'UTC' を追加（PostgreSQL コンテナと同じ解釈で日付を取り込むため）
+*/
+/*
 EC サイト「ZakkaMall」サンプルデータ - 商品データ
 */
 
 SET search_path = 'zakka_mall'; -- noqa:
+SET TimeZone = 'UTC'; -- noqa:
 
 -- 商品データ（エレクトロニクス - ノートパソコン）
 INSERT INTO product (product_name, product_code, sku, category_id, supplier_id, unit_price, description, specifications) VALUES

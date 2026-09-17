@@ -4,6 +4,11 @@ config-version: 2
 
 profile: 'dbt_book_apdx_data_modeling_project'
 
+flags:
+  # generic test の引数を arguments: プロパティから読む挙動を有効にする。
+  # dbt v2 では behavior change flag のオプトアウトができないため、明示的に true にしておく。
+  require_generic_test_arguments_property: true
+
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
@@ -21,6 +26,10 @@ clean-targets:
 # 第 4 章のような intermediate 層・SCD Type 2（dbt snapshot）・集計マートは採用しない。
 models:
   zakkamall_analytics:
+    # 静的解析のレベル。baseline は v2 の既定値で、検出結果はすべて警告になる。
+    # strict にするとカラム単位の型解決とカラムレベルリネージが有効になるが、dbt login が必要。
+    +static_analysis: baseline
+
     staging:
       +materialized: view
       +schema: staging

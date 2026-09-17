@@ -1,4 +1,10 @@
 /*
+v1 版（PostgreSQL）の init-scripts/04_sample_data_orders.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 2 点のみ。
+  - ALTER TABLE ... DISABLE/ENABLE TRIGGER を削除（DuckDB にトリガーは無い）
+  - SET TimeZone = 'UTC' を追加（PostgreSQL コンテナと同じ解釈で日付を取り込むため）
+*/
+/*
 EC サイト「ZakkaMall」サンプルデータ - 注文・取引データ
 本付録（Appendix A）は Semantic Layer の紹介に集中するため、payment / shipment / inventory は
 sources.yml で定義していない。注文ヘッダーと注文明細のみが fct_orders / fct_order_items を
@@ -6,6 +12,7 @@ sources.yml で定義していない。注文ヘッダーと注文明細のみ�
 */
 
 SET search_path = 'zakka_mall'; -- noqa:
+SET TimeZone = 'UTC'; -- noqa:
 
 -- 注文データ
 INSERT INTO "order" (customer_id, order_number, order_date, order_status, subtotal, tax_amount, shipping_fee, shipping_address_id, billing_address_id, order_metadata) VALUES
@@ -426,7 +433,6 @@ INSERT INTO shipment (order_id, tracking_number, carrier, shipment_status, shipp
 -- 各月に非 delivered を 5 件ずつ散らして分布を作る。
 -- 金額（subtotal / tax_amount / shipping_fee）には手を入れないため、売上メトリクスの集計値は変わらない。
 -- updated_at を書き換えないよう BEFORE UPDATE トリガーを一時的に無効化する。
-ALTER TABLE "order" DISABLE TRIGGER trigger_order_updated_at;
 
 UPDATE "order"
    SET order_status = 'shipped'
@@ -446,4 +452,3 @@ UPDATE "order"
    )::order_status_enum
  WHERE order_id > 25;
 
-ALTER TABLE "order" ENABLE TRIGGER trigger_order_updated_at;

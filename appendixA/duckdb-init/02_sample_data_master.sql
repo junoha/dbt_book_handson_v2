@@ -1,8 +1,15 @@
 /*
+v1 版（PostgreSQL）の init-scripts/02_sample_data_master.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 2 点のみ。
+  - ALTER TABLE ... DISABLE/ENABLE TRIGGER を削除（DuckDB にトリガーは無い）
+  - SET TimeZone = 'UTC' を追加（PostgreSQL コンテナと同じ解釈で日付を取り込むため）
+*/
+/*
 EC サイト「ZakkaMall」サンプルデータ - マスタデータ
 */
 
 SET search_path = 'zakka_mall'; -- noqa:
+SET TimeZone = 'UTC'; -- noqa:
 
 -- 1. カテゴリデータ（階層構造）
 INSERT INTO category (category_name, category_code, parent_category_id, description) VALUES

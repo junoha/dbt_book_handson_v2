@@ -4,7 +4,13 @@ version: 2
 # 参照する。セマンティックレイヤー利用時のテスト設計指針に沿い、次の 3 層を整備する:
 # 1. Entity Integrity: primary key の unique / not_null、外部キーの not_null / relationships
 # 2. Time dimension: time dimension（fct の order_date や dim_dates の date_day）は not_null
-# 3. Measure の前提: measure の元となる数値カラムは not_null
+# 3. Measure の前提: メトリクスの元となる数値カラムは not_null
+#
+# dbt v2 の新しいセマンティックレイヤー spec では、セマンティックモデルは独立したリソースではなく
+# 「モデルのプロパティ」になった。そのため v1 版の models/semantic_layer/*.yml（トップレベルの
+# semantic_models: / metrics:）は廃止し、各モデルのエントリに semantic_model: / metrics: を
+# 埋め込んでいる。同じモデルを 2 つの YAML に分けて書くと duplicate resource definitions で
+# エラーになるため、テストとセマンティクスは必ず同じエントリにまとめる必要がある。
 #
 # 付録 A は Semantic Layer の紹介に集中するため、第 4 章の SCD Type 2（dbt snapshot 経由）は採用せず、
 # dim / fct は最新断面のみを保持する。そのため `valid_from` / `valid_to` / `is_current` /
@@ -16,10 +22,21 @@ models:
   - name: dim_customers
     description: |
       顧客ディメンション（最新断面のみ）。
-      sem_customers.yml で primary entity `customer` の `expr: customer_id` として参照される。
+      セマンティックモデル `customers` の実体。measure を持たないディメンション専用モデルで、
+      orders 側のメトリクスを顧客属性で切るための軸を提供する。
+      付録 A は SCD Type 2 を採用せず最新断面のみを保持するため、customer_id（ナチュラルキー）を
+      primary entity として利用する。JOIN は customer エンティティ
+      （dim_customers.customer_id = fct_orders.customer_id）で解決される。
+    semantic_model:
+      enabled: true
+      name: customers
+    agg_time_dimension: registration_date
     columns:
       - name: customer_id
         description: "顧客ID（ナチュラルキー、semantic layer の customer entity として利用）"
+        entity:
+          type: primary
+          name: customer
         data_tests:
           - not_null
           - unique
@@ -29,25 +46,52 @@ models:
           - not_null
       - name: registration_date
         description: "会員登録日（semantic layer の time dimension）"
+        dimension:
+          type: time
+          name: registration_date
+        granularity: day
         data_tests:
           - not_null
       - name: prefecture
         description: "都道府県（semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: prefecture
       - name: region
-        description: "地方区分（semantic layer の categorical dimension）"
+        description: "地方区分（関東・関西・中部 等。semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: region
       - name: customer_status
-        description: "会員ステータス（semantic layer の categorical dimension）"
+        description: "会員ステータス（active / inactive 等。semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: customer_status
       - name: customer_tenure_segment
-        description: "会員継続期間セグメント（semantic layer の categorical dimension）"
+        description: "会員継続期間セグメント（new / existing / long_term 等。semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: customer_tenure_segment
 
   - name: dim_products
     description: |
       商品ディメンション（最新断面のみ）。
       staging の products / categories / suppliers を結合し、最新属性をフラットに持つ。
-      sem_products.yml で primary entity `product` の `expr: product_id` として参照される。
+      セマンティックモデル `products` の実体。標準手順のメトリクス（revenue / order_count）は
+      注文ヘッダー粒度なので直接 JOIN されないが、発展課題（fct_order_items）を有効化すると
+      product エンティティ経由で商品軸の切り口が使えるようになる。
+
+      注意: dim_products は時系列属性を持たないため agg_time_dimension もメトリクスも定義しない。
+      単価集計を行いたい場合は、時系列 fact（fct_order_items など）側に置くのが素直。
+    semantic_model:
+      enabled: true
+      name: products
     columns:
       - name: product_id
         description: "商品ID（ナチュラルキー、semantic layer の product entity として利用）"
+        entity:
+          type: primary
+          name: product
         data_tests:
           - not_null
           - unique
@@ -57,12 +101,24 @@ models:
           - not_null
       - name: category_name
         description: "商品カテゴリ名（semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: category_name
       - name: supplier_name
         description: "仕入先名（semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: supplier_name
       - name: price_tier
-        description: "価格帯区分（semantic layer の categorical dimension）"
+        description: "価格ティア（low / medium / high / premium。semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: price_tier
       - name: product_status
-        description: "商品ステータス（semantic layer の categorical dimension）"
+        description: "商品ステータス（active / inactive / discontinued 等。semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: product_status
       - name: unit_price
         description: "商品単価"
         data_tests:
@@ -133,11 +189,42 @@ models:
   # =========================================================
   - name: fct_orders
     description: |
-      注文ヘッダー fact。1 行 = 1 注文。
-      sem_orders.yml で primary entity `order` / foreign entity `customer` の基点となる。
+      注文ヘッダーの fact テーブル。1 行 = 1 注文。
+      セマンティックモデル `orders` の実体。primary entity `order` / foreign entity `customer` の
+      基点であり、売上・注文数・平均注文単価のメトリクスをここに定義する。
+      総額や税額、送料などの金額指標と、注文ステータスやサイズセグメント等の区分軸を持つ。
+    semantic_model:
+      enabled: true
+      name: orders
+    agg_time_dimension: order_date
+    metrics:
+      - name: revenue
+        description: 税送料込みの売上（fct_orders.total_amount の合計）
+        label: Revenue
+        type: simple
+        agg: sum
+        expr: total_amount
+      - name: order_count
+        description: 注文件数
+        label: Order Count
+        type: simple
+        agg: sum
+        expr: order_count
+      # ratio メトリクスは numerator / denominator をメトリクス直下に書く。
+      # v1 のように type_params: の下に置くと v2 は numerator / denominator を空で出力し、
+      # mf 側が semantic manifest をロードできなくなる。
+      - name: avg_order_value
+        description: 平均注文単価（revenue / order_count）
+        label: Avg Order Value
+        type: ratio
+        numerator: revenue
+        denominator: order_count
     columns:
       - name: order_id
         description: "注文ID。semantic layer の order entity (primary) として利用"
+        entity:
+          type: primary
+          name: order
         data_tests:
           - not_null
           - unique
@@ -148,6 +235,9 @@ models:
           MetricFlow が `customer__prefecture` などのディメンションを指定したクエリで
           fct_orders ⋈ dim_customers の JOIN を自動構築できる（公式の primary ↔ foreign パターン）。
           本付録は最新断面のみで SCD Type 2 を採用しないため、ナチュラルキー 1 つだけで結合キーとして機能する。
+        entity:
+          type: foreign
+          name: customer
         data_tests:
           - not_null
           - relationships:
@@ -163,19 +253,26 @@ models:
                 to: ref('dim_dates')
                 field: date_key
       - name: order_date
-        description: "注文日。semantic layer の time dimension（agg_time_dimension）として利用"
+        description: "注文日（日付粒度）。semantic layer の time dimension（agg_time_dimension）として利用"
+        dimension:
+          type: time
+          name: order_date
+        granularity: day
         data_tests:
           - not_null
       - name: total_amount
-        description: "注文合計金額。semantic layer の measure `total_amount` の元データ"
+        description: "注文合計金額。simple メトリクス `revenue` が sum で集計する元データ"
         data_tests:
           - not_null
       - name: order_count
-        description: "注文件数（常に 1）。semantic layer の measure `orders` の元データ"
+        description: "注文件数（常に 1）。simple メトリクス `order_count` が sum で集計する元データ"
         data_tests:
           - not_null
       - name: order_status
         description: "注文ステータス（categorical dimension）"
+        dimension:
+          type: categorical
+          name: order_status
         data_tests:
           - not_null
           - accepted_values:
@@ -183,25 +280,72 @@ models:
                 values: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
       - name: order_size_segment
         description: "注文サイズセグメント（categorical dimension）"
+        dimension:
+          type: categorical
+          name: order_size_segment
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['small', 'medium', 'large', 'extra_large']
 
+  # ---------------------------------------------------------
+  # 発展課題: 商品軸で売上を切るための明細粒度セマンティックモデル
+  #
+  # 標準手順では無効化している（semantic_model.enabled: false と各メトリクスの
+  # config.enabled: false）。orders の revenue は注文ヘッダー粒度（fct_orders）で
+  # 定義しているため、「カテゴリ別売上」のように商品軸で切る分析はできない。
+  # 商品軸を使うには、product への外部キーを持つ明細粒度のセマンティックモデルが必要になる。
+  #
+  # 試す手順
+  #   1. 下の enabled をすべて true に変える
+  #   2. dbt parse
+  #   3. mf query --metrics item_revenue --group-by product__category_name --order -item_revenue --limit 10
+  #
+  # 有効化すると mf list metrics が 3 件から 5 件に増えるため、本文の掲載内容とは一致しなくなる。
+  # 一方 mf list dimensions --metrics revenue は 9 件のまま変わらない。revenue は注文ヘッダー粒度
+  # （fct_orders）のメトリクスなので、明細を経由して商品軸に到達することはないためである。
+  # ---------------------------------------------------------
   - name: fct_order_items
     description: |
-      注文明細 fact。1 行 = 1 明細。
-      本付録の sem_orders.yml からは直接参照していないが、将来的に商品粒度の
-      メトリクスを Semantic Layer で扱う場合の入力となる。
+      注文明細の fact テーブル。1 行 = 1 明細。
+      標準手順のメトリクスからは参照していないが、product への外部キーを持つため、
+      発展課題で有効化すると商品・カテゴリ・仕入先を軸に売上を切り分けられる。
+    semantic_model:
+      name: order_items
+      enabled: false
+    agg_time_dimension: order_date
+    metrics:
+      - name: item_revenue
+        description: 明細ベースの売上（fct_order_items.line_total の合計）
+        label: Item Revenue
+        type: simple
+        agg: sum
+        expr: line_total
+        config:
+          enabled: false
+      - name: items_sold
+        description: 販売数量（fct_order_items.quantity の合計）
+        label: Items Sold
+        type: simple
+        agg: sum
+        expr: quantity
+        config:
+          enabled: false
     columns:
       - name: order_item_id
-        description: "注文明細ID"
+        description: "注文明細ID。semantic layer の order_item entity (primary) として利用"
+        entity:
+          type: primary
+          name: order_item
         data_tests:
           - not_null
           - unique
       - name: order_id
-        description: "注文ID（fct_orders への FK）"
+        description: "注文ID（fct_orders への FK）。semantic layer の order entity (foreign)"
+        entity:
+          type: foreign
+          name: order
         data_tests:
           - not_null
           - relationships:
@@ -209,19 +353,36 @@ models:
                 to: ref('fct_orders')
                 field: order_id
       - name: product_id
-        description: "商品ID（dim_products.product_id への FK）"
+        description: "商品ID（dim_products.product_id への FK）。semantic layer の product entity (foreign)"
+        entity:
+          type: foreign
+          name: product
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_products')
                 field: product_id
+      - name: customer_id
+        description: "顧客ID（dim_customers.customer_id への FK）。semantic layer の customer entity (foreign)"
+        entity:
+          type: foreign
+          name: customer
       - name: order_date
-        description: "注文日"
+        description: "注文日（日付粒度）。semantic layer の time dimension（agg_time_dimension）"
+        dimension:
+          type: time
+          name: order_date
+        granularity: day
         data_tests:
           - not_null
+      - name: quantity_type
+        description: "数量区分（single / multiple 等。semantic layer の categorical dimension）"
+        dimension:
+          type: categorical
+          name: quantity_type
       - name: quantity
-        description: "数量"
+        description: "数量。simple メトリクス `items_sold` が sum で集計する元データ"
         data_tests:
           - not_null
       - name: unit_price
@@ -229,6 +390,6 @@ models:
         data_tests:
           - not_null
       - name: line_total
-        description: "明細合計"
+        description: "明細合計。simple メトリクス `item_revenue` が sum で集計する元データ"
         data_tests:
           - not_null
