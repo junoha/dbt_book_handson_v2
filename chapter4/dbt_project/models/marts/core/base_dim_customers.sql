@@ -31,6 +31,8 @@ select
     region,
     full_address,
     has_default_address,
-    cast(updated_at as timestamp) as updated_at  -- snapshot の型一致のため timestamptz → timestamp へ
+    -- snapshot の型一致のため timestamptz → timestamp へ。
+    -- 変換先のタイムゾーンを明示しないと実行環境のローカル時刻で切り出されてしまうため UTC を指定する。
+    cast(updated_at at time zone 'UTC' as timestamp) as updated_at
 from {{ ref('int_customers_with_address') }}
 where is_valid_record = true

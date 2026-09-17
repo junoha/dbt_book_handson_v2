@@ -1,4 +1,10 @@
 /*
+v1 版（PostgreSQL）の init-scripts/04_sample_data_orders.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 2 点のみ。
+  - ALTER TABLE ... DISABLE/ENABLE TRIGGER を削除（DuckDB にトリガーは無い）
+  - SET TimeZone = 'UTC' を追加（PostgreSQL コンテナと同じ解釈で日付を取り込むため）
+*/
+/*
 EC サイト「ZakkaMall」サンプルデータ - 注文・取引データ
 注文 188 件、注文明細 409 件、支払い 188 件、配送 176 件。
 
@@ -13,7 +19,8 @@ EC サイト「ZakkaMall」サンプルデータ - 注文・取引データ
     INSERT 時に自動計算される。subtotal は明細合計と一致するよう生成済み。
 */
 
-SET search_path = 'zakka_mall'; -- noqa:
+SET search_path = 'zakka_mall';
+SET TimeZone = 'UTC';
 
 -- 注文データ（188 件）
 INSERT INTO "order" (customer_id, order_number, order_date, order_status, subtotal, tax_amount, shipping_fee, shipping_address_id, billing_address_id, order_metadata) VALUES

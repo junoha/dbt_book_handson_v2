@@ -9,7 +9,12 @@
     本章は base_dim_* → snapshot_dim_* → dim_* → fct_* の 4 段で
     SCD Type 2 を実装しているため、属性変更前の注文は当時の属性で、
     属性変更後の注文は新しい属性で結合される（期間マッチ JOIN）。
-    詳しくは chapter4/README.md の Phase 4 を参照。
+    詳しくは chapter4/README.md の「SCD Type 2（履歴管理）の確認」を参照。
+
+    DuckDB 版の注意:
+    PostgreSQL 版では BEFORE UPDATE トリガーが updated_at を自動更新していたが、
+    DuckDB にトリガーは無いため各 UPDATE で updated_at = NOW() を明示している。
+    snapshot は strategy: timestamp で updated_at を見るため、これが無いと変更が検知されない。
 
     使用方法:
     dbt run-operation add_sample_data_changes
@@ -23,38 +28,44 @@
     UPDATE zakka_mall.customer 
      SET 
          email = 'tanaka.taro.new@example.com',
-         status = 'inactive'
+         status = 'inactive',
+         updated_at = NOW()
      WHERE customer_id = 1",
     
     "UPDATE zakka_mall.customer 
      SET 
          phone = '090-9999-9999',
-         status = 'suspended'
+         status = 'suspended',
+         updated_at = NOW()
      WHERE customer_id = 2",
     
     "-- 既存商品の価格変更
     UPDATE zakka_mall.product 
      SET 
          unit_price = 1200.00,
-         status = 'active'
+         status = 'active',
+         updated_at = NOW()
      WHERE product_id = 1",
     
     "UPDATE zakka_mall.product 
      SET 
          unit_price = 2800.00,
-         status = 'discontinued'
+         status = 'discontinued',
+         updated_at = NOW()
      WHERE product_id = 3",
     
     "-- 既存注文のステータス更新
     UPDATE zakka_mall.\"order\" 
      SET 
-         order_status = 'shipped'
+         order_status = 'shipped',
+         updated_at = NOW()
      WHERE order_id = 1",
     
     "UPDATE zakka_mall.\"order\" 
      SET 
          order_status = 'delivered',
-         shipping_fee = 800.00
+         shipping_fee = 800.00,
+         updated_at = NOW()
      WHERE order_id = 2",
     
     "-- 新規顧客の追加 (customer_id : 51, 52)
@@ -81,16 +92,25 @@
          (49, 100, 10, 50),
          (50, 50, 5, 25)",
     
-    "-- 新規注文の追加（order_id は SERIAL で自動採番される）
+    "-- 新規注文の追加（order_id はシーケンスで自動採番される）
     -- snapshot 実行後の日付にすることで、SCD Type 2 の新規バージョンと期間マッチで結合する
     -- customer_id = 1 は属性を更新した既存顧客。過去の注文が旧バージョンと、
     -- この注文が新バージョンと結合されることで期間マッチの両面が確認できる
-    INSERT INTO zakka_mall.\"order\" (customer_id, order_date, order_status, subtotal, tax_amount, shipping_fee, shipping_address_id, billing_address_id)
-     VALUES 
-         (1, CURRENT_DATE, 'processing', 2400.00, 240.00, 500.00, 1, 1),
-         (51, CURRENT_DATE, 'pending', 1500.00, 150.00, 500.00, 52, 52),
-         (52, CURRENT_DATE, 'processing', 2500.00, 250.00, 500.00, 53, 53)",
-    
+    INSERT INTO zakka_mall.\"order\" (customer_id, order_number, order_date, order_status, subtotal, tax_amount, shipping_fee, shipping_address_id, billing_address_id)
+     VALUES
+         (1, 'PENDING-1', CURRENT_DATE, 'processing', 2400.00, 240.00, 500.00, 1, 1),
+         (51, 'PENDING-2', CURRENT_DATE, 'pending', 1500.00, 150.00, 500.00, 52, 52),
+         (52, 'PENDING-3', CURRENT_DATE, 'processing', 2500.00, 250.00, 500.00, 53, 53)",
+
+    "-- 注文番号の採番
+    -- PostgreSQL 版では BEFORE INSERT トリガー generate_order_number が
+    -- 'ORD-{注文日}-{order_id を 6 桁ゼロ埋め}' を自動生成していた。
+    -- DuckDB にトリガーは無いため、採番済みの order_id を使って後から更新する。
+    -- order_number は UNIQUE 制約があるため、INSERT 時の仮値は行ごとに変えている。
+    UPDATE zakka_mall.\"order\"
+     SET order_number = 'ORD-' || strftime(order_date, '%Y%m%d') || '-' || lpad(order_id::varchar, 6, '0')
+     WHERE order_number LIKE 'PENDING-%'",
+
     "-- 新規注文明細の追加
     -- order_id はサブクエリで引く。ハードコードするとサンプルデータの件数を
     -- 変えたときに既存の注文へ明細が付いてしまうため
@@ -112,9 +132,9 @@
     "-- 新規配送情報の追加
     INSERT INTO zakka_mall.shipment (order_id, tracking_number, carrier, shipment_status, estimated_delivery_date)
      VALUES 
-         ((SELECT order_id FROM zakka_mall.\"order\" WHERE customer_id = 1 AND order_date = CURRENT_DATE), 'TRK-' || to_char(CURRENT_DATE, 'YYYYMMDD') || '-003', 'ヤマト運輸', 'preparing', CURRENT_DATE + 3),
-         ((SELECT order_id FROM zakka_mall.\"order\" WHERE customer_id = 51 AND order_date = CURRENT_DATE), 'TRK-' || to_char(CURRENT_DATE, 'YYYYMMDD') || '-001', 'ヤマト運輸', 'preparing', CURRENT_DATE + 4),
-         ((SELECT order_id FROM zakka_mall.\"order\" WHERE customer_id = 52 AND order_date = CURRENT_DATE), 'TRK-' || to_char(CURRENT_DATE, 'YYYYMMDD') || '-002', '佐川急便', 'preparing', CURRENT_DATE + 5)"
+         ((SELECT order_id FROM zakka_mall.\"order\" WHERE customer_id = 1 AND order_date = CURRENT_DATE), 'TRK-' || strftime(CURRENT_DATE, '%Y%m%d') || '-003', 'ヤマト運輸', 'preparing', CURRENT_DATE + 3),
+         ((SELECT order_id FROM zakka_mall.\"order\" WHERE customer_id = 51 AND order_date = CURRENT_DATE), 'TRK-' || strftime(CURRENT_DATE, '%Y%m%d') || '-001', 'ヤマト運輸', 'preparing', CURRENT_DATE + 4),
+         ((SELECT order_id FROM zakka_mall.\"order\" WHERE customer_id = 52 AND order_date = CURRENT_DATE), 'TRK-' || strftime(CURRENT_DATE, '%Y%m%d') || '-002', '佐川急便', 'preparing', CURRENT_DATE + 5)"
   ] %}
   
     {% if execute %}

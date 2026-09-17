@@ -14,7 +14,8 @@ cleaned as (
         customer_id,
         phone,
         registration_date,
-        status as customer_status,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(status as varchar) as customer_status,
         created_at,
         updated_at,
         trim(customer_name) as customer_name,

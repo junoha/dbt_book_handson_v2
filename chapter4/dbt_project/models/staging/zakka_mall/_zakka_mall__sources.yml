@@ -35,7 +35,7 @@ sources:
                     values: ['active', 'inactive', 'suspended']
 
         config:
-          # PostgreSQL は metadata 経由の freshness をサポートしないため
+          # DuckDB は metadata 経由の freshness をサポートしないため
           # loaded_at_field でクエリベース計算に切り替える
           loaded_at_field: updated_at
           freshness:
@@ -280,7 +280,7 @@ sources:
             description: "注文メタデータ"
 
         config:
-          # PostgreSQL は metadata 経由の freshness をサポートしないため
+          # DuckDB は metadata 経由の freshness をサポートしないため
           # loaded_at_field でクエリベース計算に切り替える
           loaded_at_field: updated_at
           freshness:

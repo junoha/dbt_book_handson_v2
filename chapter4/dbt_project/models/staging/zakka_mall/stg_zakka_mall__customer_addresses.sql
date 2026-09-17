@@ -13,7 +13,8 @@ cleaned as (
     select
         address_id,
         customer_id,
-        address_type,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(address_type as varchar) as address_type,
         postal_code,
         prefecture,
         city,
@@ -56,7 +57,7 @@ with_quality as (
         -- 形式・値域に関する検証のみを is_valid_record に集中させる。
         case
             -- 郵便番号は 7 桁数字（ハイフン有無は問わない）
-            when postal_code !~ '^[0-9]{3}-?[0-9]{4}$' then false
+            when not regexp_matches(postal_code, '^[0-9]{3}-?[0-9]{4}$') then false
             -- 住所詳細が空文字列のみ
             when trim(address_line1) = '' then false
             -- 都道府県が 47 都道府県以外（region 判定で「その他」になるケース）

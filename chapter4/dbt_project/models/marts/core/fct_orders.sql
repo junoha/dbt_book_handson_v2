@@ -87,9 +87,10 @@ order_facts as (
     from orders_with_items as oi
     left join orders_with_payment_shipment as ps on oi.order_id = ps.order_id
     left join customers as dc
-        on oi.customer_id = dc.customer_id
-        and oi.order_date >= dc.valid_from::date
-        and oi.order_date < dc.valid_to::date
+        on
+            oi.customer_id = dc.customer_id
+            and oi.order_date >= dc.valid_from::date
+            and oi.order_date < dc.valid_to::date
     inner join dates as dd on oi.order_date = dd.date_key
     where oi.is_valid_order = true
 )

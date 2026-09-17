@@ -13,8 +13,9 @@ cleaned as (
     select
         payment_id,
         order_id,
-        payment_method,
-        payment_status,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(payment_method as varchar) as payment_method,
+        cast(payment_status as varchar) as payment_status,
         payment_amount,
         payment_date,
         transaction_id,

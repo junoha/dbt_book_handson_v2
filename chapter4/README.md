@@ -1,5 +1,7 @@
 # 第4章 実践的データモデリング - ハンズオン環境
 
+**dbt v2**（Rust エンジン）+ **DuckDB** で構築した dbt プロジェクトです。
+
 ## 概要
 
 本ハンズオンでは、EC サイト「ZakkaMall」の OLTP 業務システムから OLAP 分析システムへのデータ変換を実践します。急成長中の EC サイト企業「ZakkaMall」において、以下の課題を解決するためのデータマート構築プロジェクトを実施します。
@@ -17,74 +19,114 @@
 
 各レイヤーの役割、プロジェクトのディレクトリ構成、構築するマートの一覧は末尾の「リファレンス」にまとめています。
 
+## dbt v1 + PostgreSQL 版との違い
+
+元の第4章は dbt v1（Python 版 dbt Core）+ PostgreSQL で構築されています。このプロジェクトはそれを dbt v2 + DuckDB に移行したものです。
+
+| | dbt v1 + PostgreSQL 版 | このプロジェクト |
+| --- | --- | --- |
+| dbt | dbt-core 1.11（Python） | dbt 2.0.4（Rust、単一バイナリ） |
+| データプラットフォーム | PostgreSQL 17（Docker） | DuckDB（ローカルファイル 1 つ） |
+| 必要なもの | Docker、uv、Python | dbt、DuckDB CLI |
+| Python 仮想環境 | 必要（`uv sync`） | 不要 |
+| Lint | sqlfluff（`sqlfluff-templater-dbt`） | `dbt lint` / `dbt format`（内蔵） |
+| dbt platform アカウント | 不要 | 不要（`dbt login` はしない） |
+
+> [!NOTE]
+> 2026/09 時点では dbt v2 は PostgreSQL を正式サポートしていません（Snowflake / BigQuery / Databricks / Redshift / DuckDB / Spark）。
+> ローカル完結で動かせる v2 のアダプタが DuckDB のみのため、このプロジェクトでは DuckDB を使います。
+
+> [!IMPORTANT]
+> `dbt login` をしない構成のため、静的解析は `baseline`（検出結果はすべて警告）に固定されます。
+> `strict` が前提のカラムレベルリネージ・カラム単位の型チェックは使えません。
+
+業務システムと分析システムでは異なるデータベースを利用することも多いですが、このハンズオンでは 1 つの DuckDB ファイル（`dbt_demo.duckdb`）の中に、各レイヤーに対応するスキーマ（`zakka_mall` / `analytics_staging` / `analytics_marts_core` など）を用意することで区別するようにしています。
+
 ## 前提条件
 
-Docker（`docker compose` が実行できること）と uv のインストールは、[ハンズオン共通のセットアップ](../README.md#共通の前提条件)にまとめています。まだの場合は先に済ませてください。本ハンズオンでは AWS リソースは使いません。
+本ハンズオンでは AWS リソースも Docker も使いません。必要なのは dbt v2 と DuckDB CLI の 2 つだけです。
 
-本ハンズオンのコマンドはmacOS / Linuxのシェル（bash / zsh）とWindowsのPowerShellで動作します。
+### dbt v2
 
-このハンズオンではデータベースに PostgreSQL 17 を利用します。業務システムと分析システムでは異なるデータベースを利用することも多いですが、このハンズオンでは 1 つのデータベース上に各レイヤーに対応するスキーマを用意することで区別するようにしています。
+```bash
+# macOS（Homebrew）
+brew tap dbt-labs/dbt
+brew install dbt-labs/dbt/dbt
+
+# macOS / Linux（インストーラ）
+curl -fsSL https://public.cdn.getdbt.com/fs/install/install.sh | sh -s -- --update
+
+# Windows（PowerShell）
+irm https://public.cdn.getdbt.com/fs/install/install.ps1 | iex
+```
+
+```bash
+dbt --version   # 2.0.4 以上であること
+```
+
+### DuckDB CLI
+
+データベースの初期化と中身の確認に使います。
+
+```bash
+# macOS
+brew install duckdb
+```
+
+Windows やその他の環境は [DuckDB の Installation ページ](https://duckdb.org/docs/installation/) を参照してください。
 
 ## 環境構築
 
-### 1. Docker 環境の起動
+### 1. DuckDB データベースの作成
+
+`chapter4/duckdb-init/` の SQL を順番に流し込みます。`chapter4` ディレクトリで実行してください。
 
 ```bash
 cd chapter4
-
-# Docker 環境の起動
-docker compose up -d
-
-# 起動確認
-docker compose ps
+cat duckdb-init/*.sql | duckdb dbt_project/dbt_demo.duckdb
 ```
 
-スキーマとテーブルの準備は PostgreSQL docker イメージの[初期化スクリプト](https://hub.docker.com/_/postgres#initialization-scripts)の仕組みで自動的に行われます。
+Windows（PowerShell）の場合:
+
+```powershell
+cd chapter4
+Get-Content duckdb-init/*.sql | duckdb dbt_project/dbt_demo.duckdb
+```
 
 ```
-init-scripts/
+duckdb-init/
 ├── 01_ddl.sql                    # テーブル定義（DDL）
 ├── 02_sample_data_master.sql     # マスタデータ（カテゴリ、仕入先、顧客、住所）
 ├── 03_sample_data_products.sql   # 商品データ（商品、在庫）
-└── 04_sample_data_orders.sql     # 取引データ（注文、支払い、配送）
+├── 04_sample_data_orders.sql     # 取引データ（注文、支払い、配送）
+└── 05_category_path.sql          # カテゴリ階層パスの生成
 ```
 
-### 2. pgAdmin での確認（オプション）
+`01_ddl.sql` は PostgreSQL 版の DDL を DuckDB へ移植したものです。移植内容（IDENTITY → シーケンス、LTREE → VARCHAR、トリガー・インデックス・外部キーの削除など）はファイル先頭のコメントにまとめています。
 
-ブラウザで http://localhost:8080 にアクセスして pgAdmin を開きテーブルの状態を確認できます。
+### 2. データの確認（オプション）
 
-- **Username**: dbt_user
-- **Password**: dbt_password
+```bash
+duckdb dbt_project/dbt_demo.duckdb
+```
 
-### 3. dbt プロジェクトのセットアップ
+```sql
+D SELECT count(*) FROM zakka_mall."order";
+D SELECT category_code, category_path FROM zakka_mall.category LIMIT 5;
+D .quit
+```
+
+### 3. 接続確認とパッケージのインストール
 
 ```bash
 cd dbt_project
-
-# Python 仮想環境の作成と有効化
-uv sync --frozen
-
-source .venv/bin/activate  # macOS/Linux
-# または
-.venv\Scripts\activate     # Windows
-```
-
-> [!NOTE]
-> `pyproject.toml` では dbt-core 1.11 系に対して dbt-postgres 1.10 系を指定しています。dbt-postgres などのアダプターは dbt-core 1.8 以降、dbt-core とは独立したバージョン体系でリリースされており、バージョン番号が一致している必要はありません。dbt-postgres 1.10 系は dbt-core 1.11 と互換性があります。
-
-### 4. 接続確認とパッケージのインストール
-
-```bash
-# データベース接続の確認
 dbt debug
-
-# パッケージのインストール
 dbt deps
 ```
 
 ## ハンズオンの実施
 
-本文の節に対応させて Phase 1 から順に進めます。各 Phase の見出しに対応する本文の節名を併記しています。
+本文の節に対応させて Phase 1 から順に進めます。各 Phase の見出しに対応する本文の節名を併記しています。以降のコマンドは `chapter4/dbt_project` ディレクトリで実行します。
 
 ### Phase 1: staging レイヤー（本文「stagingレイヤーの実装」）
 
@@ -106,7 +148,7 @@ intermediate の 4 モデルは `ephemeral` で定義しているため、実体
 dbt run --select intermediate
 ```
 
-ephemeral モデルはマテリアライズの対象外なので、実行対象が 0 件になり、モデルの作成ログは出ません。実体を持たない代わりに、参照元のモデルへコンパイル時に CTE として展開されます。
+実行サマリーが `4 total | 4 no-op` となり、モデルの作成ログは出ません。ephemeral モデルはマテリアライズの対象外で、実体を持たない代わりに、参照元のモデルへコンパイル時に CTE として展開されます。
 
 ```bash
 dbt compile --select fct_orders
@@ -151,7 +193,16 @@ dbt snapshot
 dbt run --select marts.core
 ```
 
-**履歴の確認（pgAdmin または psql）**
+> [!NOTE]
+> DuckDB にはトリガーが無いため、`add_sample_data_changes` マクロは PostgreSQL 版と違って
+> `updated_at = NOW()` と注文番号の採番を明示的に実行しています（詳細は後述の
+> 「snapshot timestamp 戦略と updated_at の更新」）。
+
+**履歴の確認（DuckDB CLI）**
+
+```bash
+duckdb dbt_demo.duckdb
+```
 
 ```sql
 -- customer_id = 1 の属性履歴（2 バージョン）
@@ -177,10 +228,20 @@ WHERE product_id = 1
 ORDER BY valid_from;
 ```
 
+顧客 1 / 2 と商品 1 / 3 について、変更前後の 2 バージョンが期間付きで保持されていれば成功です。snapshot の生テーブルを直接見る場合は次のクエリを使います。
+
+```bash
+duckdb dbt_demo.duckdb -c "
+SELECT customer_id, customer_status, email, dbt_valid_from, dbt_valid_to
+FROM analytics_snapshots.snapshot_dim_customers
+WHERE customer_id IN (1, 2)
+ORDER BY customer_id, dbt_valid_from;"
+```
+
 なお、マクロが追加した当日注文には価格改定後の `product_id = 1` が含まれます。Phase 5 で作る `sales_obt` では、この注文が改定後の単価、過去の注文が改定前の単価と結合されており、商品ディメンションでも期間マッチが働いていることが確認できます。
 
 > [!NOTE]
-> 本文が「現在有効な顧客情報を取得」する例として挙げている `WHERE valid_to > current_date` は、Phase 4 の直後に実行すると顧客 1 人につき 2 行返ります。`valid_to` は日付ではなくミリ秒精度のタイムスタンプで記録されるため、当日に閉じられた旧バージョンの `valid_to`（マクロの実行時刻）が `current_date`（当日 00:00）より大きくなり、旧バージョンも条件を満たしてしまうためです。現在有効なバージョンだけを取り出すには、`dbt_valid_to_current` で固定した値を直接指定する `WHERE valid_to = '9999-12-31'` か、時刻まで比較する `WHERE valid_to > current_timestamp` を使います。
+> 本文が「現在有効な顧客情報を取得」する例として挙げている `WHERE valid_to > current_date` は、Phase 4 の直後に実行すると顧客 1 人につき 2 行返ります。`valid_to` は日付ではなくマイクロ秒精度のタイムスタンプで記録されるため、当日に閉じられた旧バージョンの `valid_to`（マクロの実行時刻）が `current_date`（当日 00:00）より大きくなり、旧バージョンも条件を満たしてしまうためです。現在有効なバージョンだけを取り出すには、`dbt_valid_to_current` で固定した値を直接指定する `WHERE valid_to = '9999-12-31'` か、時刻まで比較する `WHERE valid_to > current_timestamp` を使います。
 
 > [!NOTE]
 > マクロは実行日（未来日）の注文を追加するのに対し、`customer_analysis` の RFM 分析は `analysis_as_of_date`（既定 2024-12-31）を基準日に使うため、この注文を持つ顧客の `days_since_last_order` は負の値になります。基準日を固定して結果を安定させることの裏返しであり、実務では基準日をデータの最新日に合わせて運用します（`dbt run --vars '{analysis_as_of_date: 2026-12-31}'` のように上書きできます）。
@@ -218,7 +279,7 @@ dbt test
 dbt build
 ```
 
-`dbt build` は snapshot を DAG に含むので、環境構築直後の初回実行でも `base_dim_*` → `snapshot_dim_*` → `dim_*` → `fct_*` の順に処理され、1 コマンドで完了します。ここまで Phase を分けて実行してきたのは、各レイヤーの役割と依存関係を目で確認するためです。
+環境構築直後の初回実行でも `base_dim_*` → `snapshot_dim_*` → `dim_*` → `fct_*` の順に処理され、`25 models / 198 tests / 2 snapshots`（intermediate の 4 モデルは ephemeral なので no-op）が 1 コマンドで完了します。ここまで Phase を分けて実行してきたのは、各レイヤーの役割と依存関係を目で確認するためです。
 
 特定のレイヤーだけを対象にする場合は `--select` で絞り込みます。
 
@@ -235,30 +296,51 @@ dbt snapshot                       # SCD Type 2 の履歴テーブルの更新
 
 ## ドキュメントの生成と確認
 
+v2 の `dbt docs` は Parquet 形式のアーティファクトと静的サイトを一括生成し、`dbt docs serve` はそれを読んでローカルサーバーを起動します。
+
 ```bash
 # ドキュメント生成
 dbt docs generate
 
-# ドキュメントサーバー起動
-dbt docs serve --host 0.0.0.0 --port 7070 --no-browser
+# ドキュメントサーバー起動（既定は 127.0.0.1:8580、ブラウザ自動起動）
+dbt docs serve --port 7070 --no-open
 ```
 
 ブラウザで http://localhost:7070 にアクセスして dbt プロジェクトのドキュメントを確認できます。
 
-## SQL の lint（オプション）
+> [!NOTE]
+> v1 の `--no-browser` は v2 では `--no-open` に変わっています。`dbt docs serve` は `target/private/index/` の
+> Parquet を読むだけなので、事前に `dbt build` か `dbt docs generate` を済ませておいてください。
 
-本プロジェクトには [SQLFluff](https://docs.sqlfluff.com/) の設定（`.sqlfluff`）が含まれており、`pyproject.toml` の依存にも `sqlfluff-templater-dbt` が入っています。dbt テンプレート（`ref()` や `config()`）を解決してから lint するため、実行前に `dbt deps` を済ませておいてください。
+## SQL の lint
+
+v2 は sqlfluff 相当のリンタ・フォーマッタを内蔵しており、`.sqlfluff` の設定とルールコードをそのまま解釈します。v1 のように `sqlfluff-templater-dbt` を別途インストールする必要はありません。
 
 ```bash
 # lint（models / snapshots / tests を対象にする）
-sqlfluff lint models/ snapshots/ tests/
+dbt lint
 
-# 自動修正
-sqlfluff fix models/ snapshots/ tests/
+# 自動整形
+dbt format
 ```
 
 > [!NOTE]
-> 本ハンズオンのモデルは lint をすべて通す状態にはしていません。たとえば `fct_orders.sql` の期間マッチ JOIN のインデントは本文の掲載形と揃えてあり、`sqlfluff fix` を実行すると本文と字面が変わります。`dim_dates` の `year` / `month` などの予約語カラム名、`is_valid_record` の `case` 式（`coalesce` に書き換えられる）も同様に本文の説明に合わせたものです。lint 設定は実務プロジェクトでの使い方を示すサンプルとして同梱しており、`.sqlfluff` の `exclude_rules` に自分のチームの方針を追記して使ってください。
+> 本ハンズオンのモデルは lint をすべて通す状態にはしていません。`dbt lint` は 12 件のエラー（ST01 の `else null`、ST02 の `case` 式）と 8 件の警告（ST06、`dim_dates` の `year` / `month` などの予約語カラム名）を報告し、終了コード 1 で終わります。たとえば `fct_orders.sql` の期間マッチ JOIN のインデントは本文の掲載形と揃えてあり、`is_valid_record` の `case` 式（`coalesce` に書き換えられる）も本文の説明に合わせたものです。lint 設定は実務プロジェクトでの使い方を示すサンプルとして同梱しており、`.sqlfluff` の `exclude_rules` に自分のチームの方針を追記して使ってください。なお現在のモデルは整形済みのため、`dbt format` を実行しても差分は出ません。
+
+## v2 の機能を試す
+
+```bash
+# モデルの鮮度チェック（Beta）
+dbt freshness
+
+# メタデータを Parquet で出力
+dbt parse --generate-info-schema
+```
+
+> [!NOTE]
+> `dbt freshness` は環境構築直後は `StaleSource` エラーになります。サンプルデータの `updated_at` が
+> 2024 年の固定日付で、`_zakka_mall__sources.yml` の `error_after`（1〜2 日）を超えるためです。
+> Phase 4 の `add_sample_data_changes`（`updated_at = NOW()`）を実行したあとなら通ります。
 
 ## クリーンアップ
 
@@ -266,11 +348,8 @@ sqlfluff fix models/ snapshots/ tests/
 # dbt プロジェクトの初期化（target / dbt_packages / dbt_internal_packages / logs を削除）
 dbt clean
 
-# Python 仮想環境の無効化
-deactivate
-
-# docker 環境の削除
-docker compose down -v --remove-orphans
+# データベースファイルの削除
+rm dbt_demo.duckdb
 ```
 
 > [!NOTE]
@@ -278,17 +357,22 @@ docker compose down -v --remove-orphans
 
 ## トラブルシューティング
 
-**`dbt debug` が PostgreSQL に接続できない**
+**`dbt debug` がデータベースに接続できない**
 
-`docker compose ps` で `dbt_zakka_mall` コンテナが `healthy` になっているか確認してください。ポート 5432 が他プロセスで使われている場合は `compose.yml` のポートマッピングを変更するか、競合プロセスを停止します。
+`profiles.yml` の `path: dbt_demo.duckdb` は相対パスです。`chapter4/dbt_project` ディレクトリで実行しているか、`dbt_demo.duckdb` が同ディレクトリに作られているかを確認してください（「環境構築」の手順 1 は `chapter4` ディレクトリで実行し、`dbt_project/dbt_demo.duckdb` に作成します）。DuckDB は 1 プロセスしか書き込めないため、`duckdb dbt_demo.duckdb` の対話セッションを開いたままだと dbt 側が書き込めません。`.quit` で閉じてから実行してください。
 
-**`dbt run --select marts.core` が「relation does not exist」で失敗する**
+**`dbt run --select marts.core` が `Catalog Error: Table with name "analytics_snapshots.snapshot_dim_customers" does not exist` で失敗する**
 
 `dim_customers` / `dim_products` は snapshot テーブルを参照するため、`dbt snapshot` を実行する前にビルドできません。Phase 3 の 3 段階（`base_dim_*` → `dbt snapshot` → `marts.core`）の順に実行してください。順序を気にせず 1 コマンドで済ませる場合は `dbt build` を使います。
 
 **何度も実行して DB の状態が分からなくなった**
 
-`add_sample_data_changes` マクロはソースデータに行を追加・更新するため、繰り返し実行すると Phase 4 の履歴が期待通りに読めなくなります。`docker compose down -v` でボリュームを削除して `docker compose up -d` で作り直すと、初期化スクリプトからクリーンな状態に戻ります。
+`add_sample_data_changes` マクロはソースデータに行を追加・更新するため、繰り返し実行すると Phase 4 の履歴が期待通りに読めなくなります。データベースファイルを削除して作り直すと、初期化スクリプトからクリーンな状態に戻ります。
+
+```bash
+rm dbt_project/dbt_demo.duckdb          # chapter4 ディレクトリで実行
+cat duckdb-init/*.sql | duckdb dbt_project/dbt_demo.duckdb
+```
 
 ## リファレンス
 
@@ -334,13 +418,13 @@ dbt_project/
 │   ├── intermediate/                                # intermediate レイヤー（ephemeral）
 │   │   ├── customers/
 │   │   │   ├── _customers__models.yml               # intermediate モデル定義
-│   │   │   └── int_customers_with_address.sql      # 顧客×デフォルト住所の結合
+│   │   │   └── int_customers_with_address.sql       # 顧客×デフォルト住所の結合
 │   │   ├── products/
 │   │   │   ├── _products__models.yml
 │   │   │   └── int_products_with_category_and_supplier.sql  # 商品×カテゴリ×仕入先
 │   │   ├── sales/
 │   │   │   ├── _sales__models.yml
-│   │   │   └── int_orders_with_items.sql           # 注文ヘッダー×明細の集約
+│   │   │   └── int_orders_with_items.sql            # 注文ヘッダー×明細の集約
 │   │   └── operations/
 │   │       ├── _operations__models.yml
 │   │       └── int_orders_with_payment_shipment.sql # 注文×支払い×配送
@@ -365,7 +449,7 @@ dbt_project/
 │       └── operations/                              # オペレーション系マート
 │           ├── _operations__models.yml
 │           └── order_processing.sql
-├── snapshots/                                       # SCD Type 2 の履歴管理（v1.9+ YAML 形式）
+├── snapshots/                                       # SCD Type 2 の履歴管理（YAML 形式）
 │   └── snapshots.yml                                # snapshot_dim_customers / snapshot_dim_products
 ├── macros/
 │   └── add_sample_data_changes.sql                  # サンプルデータ変更追加（ハンズオン用）
@@ -373,10 +457,10 @@ dbt_project/
 │   ├── business_rule_sales_amount_positive.sql      # sales_obt の total_amount が負でないことを検証
 │   └── cross_table_order_subtotal_consistency.sql   # order.subtotal と sum(order_item.line_total) の整合性を検証
 ├── dbt_project.yml                                  # プロジェクト設定
-├── profiles.yml                                     # データベース接続設定
+├── profiles.yml                                     # データベース接続設定（DuckDB のファイルパス）
 ├── packages.yml                                     # dbt パッケージ依存関係（dbt_utils のみ）
-├── pyproject.toml                                   # Python 依存定義（dbt-core / dbt-postgres / sqlfluff）
-└── .sqlfluff                                        # SQLFluff の lint 設定（オプション）
+├── .sqlfluff                                        # dbt lint / dbt format の設定
+└── dbt_demo.duckdb                                  # DuckDB データベース（duckdb-init から生成、Git 管理外）
 ```
 
 ### 分析マートテーブル
@@ -408,11 +492,13 @@ dbt_project/
 
 この構成により、vars を変更するだけで日付範囲やしきい値を調整でき、SQL 本体を書き換える必要がありません。実務では「過去データの取り込み範囲を拡張する」「本番・開発環境で異なる範囲を使う」「分析しきい値をビジネス側と合意した値に揃える」といった場面で活きるパターンです。vars はインクリメンタルモデルの基準日、ビジネスしきい値、データ品質基準など、プロジェクト全体で共有したいパラメータの定義場所として広く活用できます。
 
-### snapshot timestamp 戦略と updated_at 自動更新トリガー
+### snapshot timestamp 戦略と updated_at の更新
 
-snapshot の `timestamp` 戦略は「ソース側で UPDATE のたびに `updated_at` が新しい値に書き換わる」前提で動きます。MySQL や MariaDB は `ON UPDATE CURRENT_TIMESTAMP` 句で簡単に実現できますが、PostgreSQL には同等の構文がないため `BEFORE UPDATE` トリガーで関数を発火させる方法を使います。
+snapshot の `timestamp` 戦略は「ソース側で UPDATE のたびに `updated_at` が新しい値に書き換わる」前提で動きます。MySQL や MariaDB は `ON UPDATE CURRENT_TIMESTAMP` 句で実現でき、PostgreSQL には同等の構文がないため `BEFORE UPDATE` トリガーで関数を発火させる方法を使います。
 
-本ハンズオンでは `init-scripts/01_ddl.sql` で `update_updated_at_column()` 関数を定義し、`updated_at` を持つ 8 テーブル（`customer` / `customer_address` / `category` / `supplier` / `product` / `order` / `payment` / `shipment`）すべてに `BEFORE UPDATE` トリガーを仕込んでいます。このため `add_sample_data_changes` マクロ内の UPDATE 文に `updated_at = NOW()` を明示しなくても、トリガーが自動的に `updated_at` を更新し、snapshot の `timestamp` 戦略が差分を検知できます。実務でも、こうしたトリガーまたはアプリケーション層・ORM での自動更新が `timestamp` 戦略の前提条件になります（仕込めないソースに対しては `strategy: check` を検討してください）。
+**DuckDB にはトリガーがありません。** そのため本ハンズオンでは、`add_sample_data_changes` マクロの UPDATE 文で `updated_at = NOW()` を明示的にセットしています（PostgreSQL 版では `init-scripts/01_ddl.sql` の `update_updated_at_column()` 関数と `BEFORE UPDATE` トリガーが自動で更新していました）。この明示が無いと `updated_at` が変わらず、snapshot の `timestamp` 戦略が差分を検知できません。同じ理由で、マクロが追加する注文の `order_number` もトリガー相当の採番をマクロ側で行っています。
+
+実務では、トリガーまたはアプリケーション層・ORM での `updated_at` 自動更新が `timestamp` 戦略の前提条件になります（仕込めないソースに対しては `strategy: check` を検討してください）。
 
 ### 期間マッチ JOIN の境界ケース
 
@@ -428,7 +514,7 @@ fct_orders / fct_order_items の期間マッチ JOIN（`order_date >= valid_from
 | def456 | 2024-03-15 09:00 | 2024-03-15 15:00 |
 | ghi789 | 2024-03-15 15:00 | 9999-12-31 |
 
-`valid_from` / `valid_to` はミリ秒精度のタイムスタンプで保持されているため、3 バージョンは互いに重ならず排他的に並びます。一方、本ハンズオンの JOIN 条件は `valid_from` / `valid_to` を `date` 型にキャストして比較するため、3 バージョンは次のように丸められます。
+`valid_from` / `valid_to` はマイクロ秒精度のタイムスタンプで保持されているため、3 バージョンは互いに重ならず排他的に並びます。一方、本ハンズオンの JOIN 条件は `valid_from` / `valid_to` を `date` 型にキャストして比較するため、3 バージョンは次のように丸められます。
 
 | customer_key | valid_from::date | valid_to::date |
 |--------------|------------------|----------------|
@@ -456,59 +542,59 @@ fct_orders / fct_order_items の期間マッチ JOIN（`order_date >= valid_from
 
 ## 付録: OLTP データベーススキーマ詳細
 
-以下の ER 図・テーブル仕様では、分析に使用しないカラム（UUID 型の外部 ID、JSONB 型の内部メタデータ、一部テーブルの created_at / updated_at 等）は省略している。完全なカラム定義は `init-scripts/01_ddl.sql` を参照。
+以下の ER 図・テーブル仕様では、分析に使用しないカラム（UUID 型の外部 ID、JSON 型の内部メタデータ、一部テーブルの created_at / updated_at 等）は省略している。完全なカラム定義は `duckdb-init/01_ddl.sql` を参照。型は DuckDB 版の DDL に合わせている（PostgreSQL 版の `bigserial` はシーケンス既定値付きの `bigint`、`ltree` は `varchar`、`jsonb` は `json` に対応する）。
 
 ### エンティティ関係図
 
 ```mermaid
 erDiagram
     customer {
-        bigserial customer_id PK
+        bigint customer_id PK
         varchar customer_name
         varchar email
         varchar phone
         date registration_date
-        varchar status
-        timestamp created_at
-        timestamp updated_at
+        enum status
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     customer_address {
-        bigserial address_id PK
+        bigint address_id PK
         bigint customer_id FK
-        varchar address_type "shipping/billing/both"
+        enum address_type "shipping/billing/both"
         varchar prefecture
         varchar city
         varchar address_line1
         varchar address_line2
         varchar postal_code
         boolean is_default
-        timestamp created_at
-        timestamp updated_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     category {
-        bigserial category_id PK
+        bigint category_id PK
         varchar category_code
         varchar category_name
         bigint parent_category_id FK
         text description
-        ltree category_path
+        varchar category_path
         boolean is_active
     }
 
     supplier {
-        bigserial supplier_id PK
+        bigint supplier_id PK
         varchar supplier_code
         varchar supplier_name
         varchar contact_email
         varchar contact_phone
         text address
-        varchar status
+        enum status
     }
 
     product {
-        bigserial product_id PK
+        bigint product_id PK
         varchar product_code
         varchar product_name
         bigint category_id FK
@@ -516,40 +602,40 @@ erDiagram
         decimal unit_price
         varchar sku
         text description
-        varchar status
-        timestamp created_at
-        timestamp updated_at
+        enum status
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     inventory {
-        bigserial inventory_id PK
+        bigint inventory_id PK
         bigint product_id FK
         integer quantity_on_hand
         integer quantity_reserved
         integer reorder_level
         integer reorder_quantity
-        timestamp last_updated
+        timestamptz last_updated
     }
 
     "order" {
-        bigserial order_id PK
+        bigint order_id PK
         bigint customer_id FK
         varchar order_number
         date order_date
-        varchar order_status
+        enum order_status
         decimal subtotal
         decimal tax_amount
         decimal shipping_fee
         decimal total_amount
         bigint shipping_address_id FK
         bigint billing_address_id FK
-        jsonb order_metadata
-        timestamp created_at
-        timestamp updated_at
+        json order_metadata
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     order_item {
-        bigserial order_item_id PK
+        bigint order_item_id PK
         bigint order_id FK
         bigint product_id FK
         integer quantity
@@ -558,21 +644,21 @@ erDiagram
     }
 
     payment {
-        bigserial payment_id PK
+        bigint payment_id PK
         bigint order_id FK
-        varchar payment_method
-        varchar payment_status
+        enum payment_method
+        enum payment_status
         decimal payment_amount
         date payment_date
         varchar transaction_id
     }
 
     shipment {
-        bigserial shipment_id PK
+        bigint shipment_id PK
         bigint order_id FK
         varchar tracking_number
         varchar carrier
-        varchar shipment_status
+        enum shipment_status
         date shipped_date
         date estimated_delivery_date
         date actual_delivery_date
@@ -590,6 +676,11 @@ erDiagram
     product ||--|| inventory : tracks
 ```
 
+> [!NOTE]
+> DuckDB 版の DDL では外部キー制約を付けていません。DuckDB は外部キーで参照されている親行を
+> UPDATE できず（値を変えない列の更新でも Constraint Error になる）、`add_sample_data_changes` が
+> customer / product / order を UPDATE するためです。ER 図の関係はデータ上の参照関係を表しています。
+
 ### テーブル仕様詳細
 
 #### 1. customer
@@ -598,14 +689,14 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| customer_id | bigserial | 主キー |
+| customer_id | bigint | 主キー（シーケンス既定値） |
 | customer_name | varchar | 顧客名 |
 | email | varchar | メールアドレス |
 | phone | varchar | 電話番号 |
 | registration_date | date | 登録日 |
-| status | varchar | ステータス（active / inactive 等） |
-| created_at | timestamp | 作成日時 |
-| updated_at | timestamp | 更新日時 |
+| status | enum | ステータス（active / inactive / suspended） |
+| created_at | timestamptz | 作成日時 |
+| updated_at | timestamptz | 更新日時 |
 
 #### 2. customer_address
 
@@ -613,7 +704,7 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| address_id | bigserial | 主キー |
+| address_id | bigint | 主キー（シーケンス既定値） |
 | customer_id | bigint | 顧客 ID |
 | address_type | enum | 住所種別（shipping / billing / both） |
 | prefecture | varchar | 都道府県 |
@@ -622,8 +713,8 @@ erDiagram
 | address_line2 | varchar | 住所 2 |
 | postal_code | varchar | 郵便番号 |
 | is_default | boolean | デフォルト住所フラグ |
-| created_at | timestamp | 作成日時 |
-| updated_at | timestamp | 更新日時 |
+| created_at | timestamptz | 作成日時 |
+| updated_at | timestamptz | 更新日時 |
 
 #### 3. category
 
@@ -631,12 +722,12 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| category_id | bigserial | 主キー |
+| category_id | bigint | 主キー（シーケンス既定値） |
 | category_code | varchar | カテゴリコード |
 | category_name | varchar | カテゴリ名 |
 | parent_category_id | bigint | 親カテゴリ ID |
 | description | text | カテゴリ説明 |
-| category_path | ltree | カテゴリパス（階層構造） |
+| category_path | varchar | カテゴリパス（階層構造、`05_category_path.sql` で生成） |
 | is_active | boolean | 有効フラグ |
 
 #### 4. supplier
@@ -645,13 +736,13 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| supplier_id | bigserial | 主キー |
+| supplier_id | bigint | 主キー（シーケンス既定値） |
 | supplier_code | varchar | 仕入先コード |
 | supplier_name | varchar | 仕入先名 |
 | contact_email | varchar | 担当者メール |
 | contact_phone | varchar | 担当者電話 |
 | address | text | 住所 |
-| status | varchar | ステータス |
+| status | enum | ステータス |
 
 #### 5. product
 
@@ -659,7 +750,7 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| product_id | bigserial | 主キー |
+| product_id | bigint | 主キー（シーケンス既定値） |
 | product_code | varchar | 商品コード |
 | product_name | varchar | 商品名 |
 | category_id | bigint | カテゴリ ID |
@@ -667,9 +758,9 @@ erDiagram
 | unit_price | decimal | 単価 |
 | sku | varchar | SKU |
 | description | text | 商品説明 |
-| status | varchar | 販売ステータス |
-| created_at | timestamp | 作成日時 |
-| updated_at | timestamp | 更新日時 |
+| status | enum | 販売ステータス |
+| created_at | timestamptz | 作成日時 |
+| updated_at | timestamptz | 更新日時 |
 
 #### 6. inventory
 
@@ -677,13 +768,13 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| inventory_id | bigserial | 主キー |
+| inventory_id | bigint | 主キー（シーケンス既定値） |
 | product_id | bigint | 商品 ID |
 | quantity_on_hand | integer | 現在庫数 |
 | quantity_reserved | integer | 引当在庫数 |
 | reorder_level | integer | 発注点 |
 | reorder_quantity | integer | 発注数量 |
-| last_updated | timestamp | 最終更新日時 |
+| last_updated | timestamptz | 最終更新日時 |
 
 #### 7. order
 
@@ -691,20 +782,20 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| order_id | bigserial | 主キー |
+| order_id | bigint | 主キー（シーケンス既定値） |
 | customer_id | bigint | 顧客 ID |
 | order_number | varchar | 注文番号 |
 | order_date | date | 注文日 |
-| order_status | varchar | 注文ステータス |
+| order_status | enum | 注文ステータス |
 | subtotal | decimal | 小計 |
 | tax_amount | decimal | 消費税額 |
 | shipping_fee | decimal | 送料 |
 | total_amount | decimal | 合計金額（生成列） |
 | shipping_address_id | bigint | 配送先住所 ID |
 | billing_address_id | bigint | 請求先住所 ID |
-| order_metadata | jsonb | 注文メタデータ |
-| created_at | timestamp | 作成日時 |
-| updated_at | timestamp | 更新日時 |
+| order_metadata | json | 注文メタデータ |
+| created_at | timestamptz | 作成日時 |
+| updated_at | timestamptz | 更新日時 |
 
 #### 8. order_item
 
@@ -712,7 +803,7 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| order_item_id | bigserial | 主キー |
+| order_item_id | bigint | 主キー（シーケンス既定値） |
 | order_id | bigint | 注文 ID |
 | product_id | bigint | 商品 ID |
 | quantity | integer | 数量 |
@@ -725,10 +816,10 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| payment_id | bigserial | 主キー |
+| payment_id | bigint | 主キー（シーケンス既定値） |
 | order_id | bigint | 注文 ID |
-| payment_method | varchar | 支払方法 |
-| payment_status | varchar | 支払ステータス |
+| payment_method | enum | 支払方法 |
+| payment_status | enum | 支払ステータス |
 | payment_amount | decimal | 支払金額 |
 | payment_date | date | 支払日 |
 | transaction_id | varchar | 決済トランザクション ID |
@@ -739,11 +830,11 @@ erDiagram
 
 | カラム | 型 | 説明 |
 | --- | --- | --- |
-| shipment_id | bigserial | 主キー |
+| shipment_id | bigint | 主キー（シーケンス既定値） |
 | order_id | bigint | 注文 ID |
 | tracking_number | varchar | 追跡番号 |
 | carrier | varchar | 配送業者 |
-| shipment_status | varchar | 配送ステータス |
+| shipment_status | enum | 配送ステータス |
 | shipped_date | date | 発送日 |
 | estimated_delivery_date | date | 配送予定日 |
 | actual_delivery_date | date | 配送完了日 |
