@@ -4,9 +4,11 @@ version = "0.1.0"
 description = "dbt hands-on appendix A"
 readme = "README.md"
 requires-python = ">=3.12"
+# モデルのビルドは dbt v2（Rust 版の単一バイナリ）で行うため、ここには dbt-core も
+# dbt-postgres も入れない。この仮想環境はメトリクスをクエリする mf（MetricFlow）専用。
+# dbt v2 内蔵の dbt sl は dbt platform への接続（dbt_cloud.yml + トークン）が前提のため、
+# ローカル完結の本ハンズオンでは mf を使う。
+# sqlfluff も不要（v2 内蔵の dbt lint / dbt format を使う）。
 dependencies = [
-    "dbt-core>=1.11.8,<1.12.0",
-    "dbt-metricflow>=0.13.0,<0.14.0",
-    "dbt-postgres>=1.10.0",
-    "sqlfluff-templater-dbt>=4.2.0",
+    "dbt-metricflow[dbt-duckdb]>=0.15.0,<0.16.0",
 ]
