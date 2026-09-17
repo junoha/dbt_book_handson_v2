@@ -1,8 +1,15 @@
 /*
+v1 版（PostgreSQL）の init-scripts/03_sample_data_products.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 2 点のみ。
+  - ALTER TABLE ... DISABLE/ENABLE TRIGGER を削除（DuckDB にトリガーは無い）
+  - SET TimeZone = 'UTC' を追加（PostgreSQL コンテナと同じ解釈で日付を取り込むため）
+*/
+/*
 EC サイト「ZakkaMall」サンプルデータ - 商品データ
 */
 
-SET search_path = 'zakka_mall'; -- noqa:
+SET search_path = 'zakka_mall';
+SET TimeZone = 'UTC';
 
 -- 商品データ（エレクトロニクス - ノートパソコン）
 INSERT INTO product (product_name, product_code, sku, category_id, supplier_id, unit_price, description, specifications) VALUES
@@ -81,12 +88,9 @@ INSERT INTO product (product_name, product_code, sku, category_id, supplier_id, 
 
 -- 商品の created_at / updated_at を 2023-01-01 に固定
 -- （SCD Type 2 の snapshot で valid_from が注文日より過去になるように）
--- BEFORE UPDATE トリガーを一時的に無効化して、明示した updated_at を維持する
-ALTER TABLE product DISABLE TRIGGER trigger_product_updated_at;
 UPDATE product
    SET created_at = '2023-01-01 00:00:00+00'::timestamptz,
        updated_at = '2023-01-01 00:00:00+00'::timestamptz;
-ALTER TABLE product ENABLE TRIGGER trigger_product_updated_at;
 
 -- 在庫データ
 INSERT INTO inventory (product_id, quantity_on_hand, quantity_reserved, reorder_level, reorder_quantity) VALUES

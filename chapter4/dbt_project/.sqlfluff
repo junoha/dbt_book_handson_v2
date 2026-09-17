@@ -1,15 +1,12 @@
+# dbt v2 に内蔵の `dbt lint` / `dbt format` が読む設定。
+# sqlfluff と互換のフォーマットなので、v1 版の .sqlfluff をほぼそのまま流用できる。
+# ただし sqlfluff-templater-dbt 用の [sqlfluff:templater:dbt] セクションは不要になったため削除し、
+# dialect は postgres から duckdb に変更している。
 [sqlfluff]
-templater = dbt
-dialect = postgres
+dialect = duckdb
 sql_file_exts = .sql
 max_line_length = 100
 exclude_rules = LT05, L036
-
-[sqlfluff:templater:dbt]
-project_dir = .
-profiles_dir = .
-profile = dbt_book_ch4_data_modeling_project
-target = dev
 
 [sqlfluff:indentation]
 indented_joins = False

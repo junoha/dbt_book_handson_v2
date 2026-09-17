@@ -1,8 +1,15 @@
 /*
+v1 版（PostgreSQL）の init-scripts/02_sample_data_master.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 2 点のみ。
+  - ALTER TABLE ... DISABLE/ENABLE TRIGGER を削除（DuckDB にトリガーは無い）
+  - SET TimeZone = 'UTC' を追加（PostgreSQL コンテナと同じ解釈で日付を取り込むため）
+*/
+/*
 EC サイト「ZakkaMall」サンプルデータ - マスタデータ
 */
 
-SET search_path = 'zakka_mall'; -- noqa:
+SET search_path = 'zakka_mall';
+SET TimeZone = 'UTC';
 
 -- 1. カテゴリデータ（階層構造）
 INSERT INTO category (category_name, category_code, parent_category_id, description) VALUES
@@ -102,12 +109,9 @@ INSERT INTO customer (customer_name, email, phone, registration_date, status) VA
 
 -- 顧客の created_at / updated_at を registration_date に合わせる
 -- （SCD Type 2 の snapshot で valid_from が注文日より過去になるように）
--- BEFORE UPDATE トリガーを一時的に無効化して、明示した updated_at を維持する
-ALTER TABLE customer DISABLE TRIGGER trigger_customer_updated_at;
 UPDATE customer
    SET created_at = registration_date::timestamptz,
        updated_at = registration_date::timestamptz;
-ALTER TABLE customer ENABLE TRIGGER trigger_customer_updated_at;
 
 -- 4. 顧客住所データ
 INSERT INTO customer_address (customer_id, address_type, postal_code, prefecture, city, address_line1, address_line2, is_default) VALUES

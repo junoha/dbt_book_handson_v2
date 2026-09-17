@@ -32,8 +32,9 @@ default_addresses as (
         full_address,
         region
     from addresses
-    where is_default = true
-      and is_valid_record = true
+    where
+        is_default = true
+        and is_valid_record = true
 ),
 
 enriched as (

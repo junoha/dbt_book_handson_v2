@@ -15,7 +15,8 @@ cleaned as (
         order_id,
         tracking_number,
         carrier,
-        shipment_status,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(shipment_status as varchar) as shipment_status,
         shipped_date,
         estimated_delivery_date,
         actual_delivery_date,

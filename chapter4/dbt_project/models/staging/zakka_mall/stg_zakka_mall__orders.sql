@@ -15,7 +15,8 @@ cleaned as (
         customer_id,
         order_number,
         order_date,
-        order_status,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(order_status as varchar) as order_status,
         subtotal,
         tax_amount,
         shipping_fee,

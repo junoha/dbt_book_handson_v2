@@ -18,7 +18,8 @@ cleaned as (
         supplier_id,
         unit_price,
         description,
-        status as product_status,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(status as varchar) as product_status,
         created_at,
         updated_at,
         specifications,

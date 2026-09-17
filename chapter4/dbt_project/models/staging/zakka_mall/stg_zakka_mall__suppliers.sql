@@ -17,7 +17,8 @@ cleaned as (
         contact_email,
         contact_phone,
         address,
-        status as supplier_status,
+        -- ENUM 型は dbt v2 の DuckDB アダプタが扱えないため varchar に正規化する
+        cast(status as varchar) as supplier_status,
         created_at,
         updated_at,
 

@@ -41,13 +41,15 @@ with order_item_facts as (
         {{ ref('stg_zakka_mall__order_items') }} as oi
     inner join {{ ref('stg_zakka_mall__orders') }} as o on oi.order_id = o.order_id
     left join {{ ref('dim_customers') }} as dc
-        on o.customer_id = dc.customer_id
-        and o.order_date >= dc.valid_from::date
-        and o.order_date < dc.valid_to::date
+        on
+            o.customer_id = dc.customer_id
+            and o.order_date >= dc.valid_from::date
+            and o.order_date < dc.valid_to::date
     left join {{ ref('dim_products') }} as dp
-        on oi.product_id = dp.product_id
-        and o.order_date >= dp.valid_from::date
-        and o.order_date < dp.valid_to::date
+        on
+            oi.product_id = dp.product_id
+            and o.order_date >= dp.valid_from::date
+            and o.order_date < dp.valid_to::date
     inner join {{ ref('dim_dates') }} as dd on o.order_date = dd.date_key
     where
         oi.is_valid_record = true and o.is_valid_record = true
