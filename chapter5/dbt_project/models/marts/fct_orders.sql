@@ -27,7 +27,9 @@ order_summary as (
     select
         order_id,
         count(order_detail_id) as item_count,
-        sum(quantity) as total_quantity
+        -- DuckDB の sum(integer) は decimal(38, 0) を返すため、
+        -- contract の data_type (bigint) に合わせて明示的にキャストする
+        cast(sum(quantity) as bigint) as total_quantity
     from order_details
     group by order_id
 ),

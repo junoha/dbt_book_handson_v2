@@ -22,7 +22,19 @@ flags:
   # Elementary 連携の必須設定。
   require_explicit_package_overrides_for_builtin_materializations: false
 
+  # generic test の引数を arguments プロパティから読む（dbt v2 の既定挙動に固定する）。
+  require_generic_test_arguments_property: true
+
+# Elementary のアダプタ別マクロをプロジェクト側で上書きするための設定。
+# macros/elementary_duckdb_fusion.sql を優先して解決させる。
+dispatch:
+  - macro_namespace: elementary
+    search_order: ["zakkamall_data_quality", "elementary"]
+
 models:
+  # dbt login をしない運用のため静的解析は baseline（既定値）を明示する。
+  +static_analysis: baseline
+
   zakkamall_data_quality:
     staging:
       +materialized: view

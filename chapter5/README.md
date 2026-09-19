@@ -18,53 +18,110 @@ dbtプロジェクトは1つで、モデルやテストはシナリオ間で共�
 
 ## 前提条件
 
-Docker（`docker compose` が実行できること）と uv のインストールは、[ハンズオン共通のセットアップ](../README.md#共通の前提条件)にまとめています。まだの場合は先に済ませてください。本ハンズオンでは Python 3.12 以上を使い、AWS リソースは使いません。
+このハンズオンは **dbt v2（Rust エンジン、2.0.x）と DuckDB** で進めます。データベースは 1 ファイル（`dbt_demo.duckdb`）で完結するため、Docker は使いません。
+
+### dbt v1（PostgreSQL）版との違い
+
+書籍本文は dbt v1（Python 版 dbt Core）+ PostgreSQL を前提にしています。本ハンズオン資材は v2 + DuckDB 向けに書き換えてあり、主な差分は次のとおりです。
+
+| 項目 | v1 版（書籍本文） | v2 版（本ハンズオン） |
+| --- | --- | --- |
+| dbt | dbt Core 1.11（Python パッケージ） | dbt v2 2.0.x（単一バイナリ） |
+| データプラットフォーム | PostgreSQL 17（Docker） | DuckDB 1.5.5（`dbt_demo.duckdb` ファイル） |
+| 必要なもの | Docker + uv | dbt v2 バイナリ + DuckDB CLI + uv |
+| データの確認 | pgAdmin / psql | DuckDB CLI（`duckdb dbt_demo.duckdb`） |
+| Lint | `sqlfluff lint` | 内蔵の `dbt lint` / `dbt format` |
+| Elementary | そのまま動作 | `macros/elementary_duckdb_fusion.sql` の互換マクロが必要（後述） |
+| Lightdash | ローカルの PostgreSQL に接続して実演 | ローカルの DuckDB ファイルには接続できないため実演しない（Exposure 生成のみ行う） |
+
+dbt v2 のインストールは[公式ドキュメント](https://docs.getdbt.com/docs/install-dbt)、DuckDB CLI のインストールは [DuckDB 公式ドキュメント](https://duckdb.org/docs/installation/)を参照してください。uv のインストールは[ハンズオン共通のセットアップ](../README.md#共通の前提条件)にまとめています。本ハンズオンでは Python 3.12 以上を使い、AWS リソースは使いません。
+
+> [!NOTE]
+> 第4章と違い、この章では Python の仮想環境（uv）も必要です。Elementary のレポートを生成する `edr` と、メタデータを整備する `dbt-osmosis` が Python パッケージのためです。モデルのビルドは v2 バイナリ、レポートとメタデータ整備は `.venv` のツール、という二層構成になります。
 
 本ハンズオンのコマンドはmacOS / Linuxのシェル（bash / zsh）とWindowsのPowerShellで動作します。
 
-このハンズオンではデータベースに PostgreSQL 17 を利用します。業務システムと分析システムでは異なるデータベースを利用することも多いですが、このハンズオンでは 1 つのデータベース上にレイヤーごとのスキーマを用意することで区別しています。業務システムのソースデータは `zakka_mall`、dbt が生成するモデルは `analytics_staging` / `analytics_marts` / `analytics_quality` / `analytics_snapshots` に格納されます。加えて Elementary と dbt_project_evaluator がそれぞれ `analytics_elementary` / `analytics_dbt_project_evaluator` を作成し、テストの失敗レコードは `store_failures` の設定により `analytics_dbt_test__audit` に保存されます。
+1 つのデータベースファイル上にレイヤーごとのスキーマを用意することで、業務システムと分析システムを区別しています。業務システムのソースデータは `zakka_mall`、dbt が生成するモデルは `analytics_staging` / `analytics_marts` / `analytics_quality` / `analytics_snapshots` に格納されます。加えて Elementary と dbt_project_evaluator がそれぞれ `analytics_elementary` / `analytics_dbt_project_evaluator` を作成し、テストの失敗レコードは `store_failures` の設定により `analytics_dbt_test__audit` に保存されます。
 
 本章は第4章のディメンショナルモデリングを前提としています。第4章で構築したスタースキーマと同じ構成のマートに対してテストと品質監視を載せていく構成のため、先に第4章のハンズオンを済ませておくと理解しやすくなります。
 
 ## 環境構築
 
-### 1. データベースの起動
+### 1. DuckDB データベースの作成
+
+`duckdb-init/` の SQL を順番に流し込むと、ソーススキーマ `zakka_mall` と品質問題を含むサンプルデータが作成されます。
 
 ```bash
-# compose.yml があるディレクトリ（プロジェクトルート）で実行
-docker compose up -d
-
-# 起動確認
-docker compose ps
+# chapter5 ディレクトリで実行
+cat duckdb-init/*.sql | duckdb dbt_project/dbt_demo.duckdb
 ```
 
-### 2. pgAdmin での確認（オプション）
+> [!NOTE]
+> DuckDB はファイル名がカタログ名になるため、データベースファイル名は `dbt_demo.duckdb` にしています。ソース定義（`database: dbt_demo`）と揃えるためで、別の名前にすると参照できません。
 
-ブラウザで `http://localhost:8080` を開くと pgAdmin が利用できます。`compose.yml` で `PGADMIN_CONFIG_SERVER_MODE: "False"`（デスクトップモード）を設定しているため、pgAdmin 自体へのログインは不要です。接続先の PostgreSQL は `pg-config.json` で事前登録済みで、パスワードを求められた場合は `dbt_password` を入力します。
-
-### 3. dbt 環境のセットアップ
+投入結果は DuckDB CLI で確認できます。
 
 ```bash
-# dbt_projectディレクトリに移動
 cd dbt_project
+duckdb dbt_demo.duckdb -c "
+SELECT table_name, estimated_size FROM duckdb_tables()
+WHERE schema_name = 'zakka_mall' ORDER BY table_name;
+"
+```
 
-# 依存関係のインストール
+### 2. Python ツール（edr / dbt-osmosis）のセットアップ
+
+```bash
+# dbt_project ディレクトリで実行
 uv sync --frozen
 
 source .venv/bin/activate  # macOS/Linux
 # または
 .venv\Scripts\activate     # Windows
-
-# dbtパッケージのインストール
-dbt deps
 ```
 
-### 4. 接続確認
+以降の `edr` / `dbt-osmosis` / `python utils/...` は、この仮想環境を有効にした状態で実行します。`dbt` コマンド自体は仮想環境とは無関係で、インストール済みの v2 バイナリが使われます。
+
+`edr`（Elementary のレポート生成）は、内部で別ディレクトリの dbt プロジェクトを実行するため、データベースファイルを**絶対パス**で受け取る必要があります。`profiles.yml` の `elementary` プロファイルが環境変数 `CH5_DUCKDB_PATH` を参照しているので、これを設定しておきます。
 
 ```bash
+# macOS / Linux
+export CH5_DUCKDB_PATH="$(pwd)/dbt_demo.duckdb"
+```
+
+```powershell
+# Windows (PowerShell)
+$env:CH5_DUCKDB_PATH = "$(Get-Location)\dbt_demo.duckdb"
+```
+
+### 3. dbt パッケージのインストールと接続確認
+
+```bash
+# dbt パッケージのインストール
+dbt deps
+
 # データベース接続テスト
 dbt debug
 ```
+
+### 4. Elementary の互換マクロについて
+
+`macros/elementary_duckdb_fusion.sql` には、Elementary を dbt v2 + DuckDB で動かすためのマクロが 4 つ入っています。dbt v2 は文ごとに別セッションで SQL を実行するため、Elementary が中間テーブルとして作る DuckDB の tempっっっｆ テーブル（セッションスコープ）が次の文から見えず、以下のエラーでビルドが失敗します。
+
+```text
+Catalog Error: Table with name dbt_models__tmp_<timestamp>... does not exist!
+Parser Error: TEMPORARY table names can *only* use the "temp" catalog
+```
+
+Elementary は同じ問題を Redshift や Databricks では回避していますが、DuckDB 用の分岐がまだありません。そこで Redshift 向けと同じ方針（temp テーブルの代わりに通常テーブルを作る）を、`dbt_project.yml` の `dispatch` 設定と組み合わせてプロジェクト側から差し込んでいます。
+
+```yaml
+dispatch:
+  - macro_namespace: elementary
+    search_order: ["zakkamall_data_quality", "elementary"]
+```
+
+パッケージが未対応の組み合わせを `dispatch` とアダプタ別マクロで埋める実例としてそのまま残しています。Elementary 本体が DuckDB 用の分岐を取り込んだら、このファイルは削除できます。
 
 ---
 
@@ -82,10 +139,18 @@ dbt debug
 dbt build
 ```
 
-初回実行のサマリは次のようになります。
+**初回実行だけは Elementary のスキーマ監視テストが 5 件 error になります。** `elementary_source_schema_changes_*` はベースラインとの比較を行うため、比較対象のテーブル（`schema_columns_snapshot`）が未作成の 1 回目だけ失敗します。続けて `dbt build` をもう一度実行すると解消します。
+
+```bash
+# 2 回目の実行（Elementary のベースラインが作られた状態）
+dbt build
+```
+
+2 回目以降のサマリは次のようになります。
 
 ```text
-Done. PASS=245 WARN=32 ERROR=2 SKIP=32 NO-OP=1 TOTAL=312
+Processed: 3 hooks | 90 models | 204 tests | 2 snapshots | 2 seeds | 5 unit tests
+Summary: 306 total | 245 success | 33 warn | 2 error | 26 skipped
 ```
 
 **ERROR が 2 件出るのは意図的な設計です。** サンプルデータとテストに品質問題を仕込んでおり、これを段階的に解消する演習を後述の「ケーススタディ」で扱います。
@@ -98,10 +163,10 @@ dbt run
 ```
 
 > [!NOTE]
-> PASS / WARN / TOTAL の件数は依存パッケージのバージョンや、Elementary が蓄積した学習データの状況によって前後します。ここで押さえるべきは **ERROR が 2 件あり、その下流が SKIP されている**という構造です。
+> success / warn / total の件数は依存パッケージのバージョンや、Elementary が蓄積した学習データの状況によって前後します。ここで押さえるべきは **error が 2 件あり、その下流が skipped になっている**という構造です。参考として v1（dbt Core 1.11 + PostgreSQL）版では `PASS=245 WARN=32 ERROR=2 SKIP=32 NO-OP=1 TOTAL=312` でした。success 245 件と error 2 件は v2 + DuckDB でも一致します。
 
 > [!NOTE]
-> 本ハンズオン環境（dbt-core 1.11.x + Elementary 0.25.0）で `dbt run` / `dbt build` / `dbt test` を実行すると、`PackageMaterializationOverrideDeprecation: xxx occurrences` の deprecation 警告が出力されることがあります。これは「インストールされた依存パッケージが built-in マテリアライゼーション（`view` / `table` / `incremental` 等）を上書きする」挙動が dbt-core 1.11 で deprecation 化されたためで、Elementary はこの仕組みに依存して内部のテーブル管理を行っています。本ハンズオンの `dbt_project.yml` では `flags.require_explicit_package_overrides_for_builtin_materializations: false` を明示的に設定して Elementary のマテリアライゼーション上書きを許可しているため（この設定がないと Elementary が機能しません）、**表示される警告は無視して進めて問題ありません**。Elementary の将来バージョンでは、root project 側で built-in マテリアライゼーションを再実装しパッケージ実装をラップする[公式推奨パターン](https://docs.getdbt.com/reference/deprecations#packagematerializationoverridedeprecation)に追従して解消される見込みです。
+> `dbt_project.yml` の `flags.require_explicit_package_overrides_for_builtin_materializations: false` は Elementary 連携の必須設定です。Elementary は built-in マテリアライゼーション（`view` / `table` / `incremental` 等）を上書きして内部のテーブル管理を行うため、この設定を外すと機能しません。dbt v2 でもこのフラグはそのまま有効です。
 
 ### Phase 2: データ品質アセスメント
 
@@ -109,7 +174,7 @@ DMBOK2 の 4 つの品質ディメンションによる評価結果と、ビジ�
 
 ```bash
 # 品質評価の結果（スコアの低い順）
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT table_name, column_name, quality_dimension, quality_score, quality_status
 FROM analytics_quality.quality_assessment
 ORDER BY quality_score
@@ -117,7 +182,7 @@ LIMIT 10;
 "
 
 # 統合ダッシュボード（品質スコアとビジネス影響度を突き合わせた改善優先度）
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT table_name, overall_quality_score, business_impact, data_contamination, action_priority
 FROM analytics_quality.quality_dashboard;
 "
@@ -162,10 +227,11 @@ Source Freshness と Elementary レポートは `dbt build` に含まれない�
 ```bash
 # dbt build には含まれない独立したコマンド
 # （source 経由で OLTP テーブルを直接見るためモデル生成は不要）
-dbt source freshness
+# v1 の `dbt source freshness` は v2 では `dbt freshness` に変わっている
+dbt freshness
 
 # 特定のソーステーブルだけを確認する（鮮度が落ちた対象を絞って調べるとき）
-dbt source freshness --select source:zakka_mall.order_header
+dbt freshness --select source:zakka_mall.order_header
 ```
 
 Model Contracts は `contract: enforced: true` により `dbt run` / `dbt build` 時に自動検証されます。スキーマ変更の検知（Elementary の `schema_changes`）と運用監視テストも Phase 1 の `dbt build` に含まれています。
@@ -181,7 +247,7 @@ dbt snapshot
 
 ```bash
 # 現在有効な行（dbt_valid_to_current を '9999-12-31' に設定しているため NULL ではない）
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT customer_id, customer_name, dbt_valid_from, dbt_valid_to
 FROM analytics_snapshots.customer_snapshot
 WHERE dbt_valid_to = '9999-12-31'
@@ -192,18 +258,22 @@ LIMIT 5;
 スキーマ名は `profiles.yml` の `target.schema`（`analytics`）と `snapshots.yml` の `config.schema`（`snapshots`）を連結した `analytics_snapshots` になります。
 
 > [!NOTE]
-> 本ハンズオンの `snapshots.yml` では `dbt_valid_to_current: "cast('9999-12-31' as timestamptz)"` のように明示キャストを記述しています。`'9999-12-31'` だけだと PostgreSQL では `text` リテラルと解釈され、`dbt_valid_to` カラム（`timestamptz` 型）と型不一致になりマテリアライズ時にエラーになるためです。dbt は YAML の値をそのまま SQL に埋め込むので、SQL エンジン側で型整合の取れる形（`cast('9999-12-31' as timestamptz)` 等）で書く必要があります。Snowflake や BigQuery は暗黙キャストが効きますが、移植性のため明示キャストが安全です。`updated_at` の型が `timestamp`（タイムゾーンなし）の場合は `cast('9999-12-31' as timestamp)` に揃えます。
+> 本ハンズオンの `snapshots.yml` では `dbt_valid_to_current: "cast('9999-12-31' as timestamptz)"` のように明示キャストを記述しています。`'9999-12-31'` だけだと文字列リテラルと解釈され、`dbt_valid_to` カラム（`timestamptz` 型）と型不一致になりマテリアライズ時にエラーになるためです。dbt は YAML の値をそのまま SQL に埋め込むので、SQL エンジン側で型整合の取れる形（`cast('9999-12-31' as timestamptz)` 等）で書く必要があります。Snowflake や BigQuery は暗黙キャストが効きますが、移植性のため明示キャストが安全です。`updated_at` の型が `timestamp`（タイムゾーンなし）の場合は `cast('9999-12-31' as timestamp)` に揃えます。
 
 #### Elementary レポートの生成
 
 ```bash
 # 前提: Phase 1 の `dbt build` で Elementary モデルを作成済みであること
+# 前提: 環境構築の手順 2 で CH5_DUCKDB_PATH を設定済みであること
 
 # Elementary レポート生成
 edr report --profiles-dir .
 ```
 
 生成された `edr_target/elementary_report.html` をブラウザで開くとレポートを確認できます。
+
+> [!IMPORTANT]
+> `CH5_DUCKDB_PATH` を設定していないと、`Catalog Error: ... schema "analytics_elementary" does not exist` で失敗します。`edr` は自身に同梱された dbt プロジェクト（`.venv/lib/.../elementary/monitor/dbt_project`）を `--project-dir` にして dbt を実行するため、`path` が相対パスだとそのディレクトリ側に空のデータベースファイルを作ってしまうためです。
 
 検知した異常をチームへ通知するには `edr monitor` を使います。本ハンズオンでは Slack ワークスペースを用意しないため実行しませんが、コマンドの形は次のとおりです。Incoming Webhook の URL を渡すと、Elementary が検知した異常が Slack に投稿されます。
 
@@ -218,7 +288,8 @@ dbt-osmosis で YAML のメタデータを整備します。Exposure による�
 
 ```bash
 # 定義済みの Exposure を一覧する
-dbt ls --resource-types exposure
+# （v2 の --resource-type に exposure は無いため、セレクタで絞り込む）
+dbt ls --select "exposure:*"
 
 # 特定のダッシュボードが依存するモデルをまとめて再構築する
 dbt run --select +exposure:executive_dashboard
@@ -240,7 +311,7 @@ dbt-osmosis yaml refactor --skip-add-data-types --skip-add-columns --skip-add-so
 
 3 つのフラグを付けているのは、本ハンズオンが型定義を手動管理しているためです。**これらを外して実行すると YAML が意図せず書き換わります。**
 
-- `--skip-add-data-types`: PostgreSQL の情報スキーマが返す正式名（`varchar` → `character varying`、`timestamptz` → `timestamp with time zone`）への書き換えを抑制します。本書の marts では `contract: enforced: true` と `alias_types: false` を設定し、本文の解説どおり `varchar` / `timestamptz` と明示しているため、この書き換えは避ける必要があります。付けずに実行すると `numeric(15, 2)` のような精度指定も `numeric` に退化します
+- `--skip-add-data-types`: 情報スキーマが返す正式名（`varchar` → `character varying`、`timestamptz` → `timestamp with time zone`）への書き換えを抑制します。本書の marts では `contract: enforced: true` と `alias_types: false` を設定し、本文の解説どおり `varchar` / `timestamptz` と明示しているため、この書き換えは避ける必要があります。付けずに実行すると `numeric(15, 2)` のような精度指定も `numeric` に退化します
 - `--skip-add-columns` / `--skip-add-source-columns`: データウェアハウスに存在するカラムを YAML へ自動追加する動作を抑制します
 
 初期状態は上記フラグ付きで `--dry-run --check` が exit 0（差分なし）になるよう整えてあります。伝播の挙動は次の手順で確認できます。
@@ -305,7 +376,7 @@ Done. PASS=245 WARN=32 ERROR=2 SKIP=32 NO-OP=1 TOTAL=312
 失敗テストの内訳は Elementary のテーブルから SQL で抽出できます。Elementary は `dbt build` / `dbt test` の実行結果を自動的に `elementary_test_results` テーブルに蓄積するため、運用時に継続的にモニタリングするのに適しています。
 
 ```bash
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT test_name, status, failures
 FROM analytics_elementary.elementary_test_results
 WHERE status IN ('fail', 'error')
@@ -333,10 +404,10 @@ edr report --profiles-dir .
 
 `business_rule_product_profit_margin_calculation` が CALCULATION_ERROR を出しています。
 
-**失敗内容の確認**: `store_failures` で保存された audit テーブルから、実際の失敗行を pgAdmin や psql で確認します。
+**失敗内容の確認**: `store_failures` で保存された audit テーブルから、実際の失敗行を DuckDB CLI で確認します。
 
 ```bash
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT product_id, product_name, price, cost,
        recorded_profit_margin, calculated_profit_margin, validation_status
 FROM analytics_dbt_test__audit.business_rule_product_profit_margin_calculation
@@ -376,7 +447,7 @@ dbt retry
 初回 build で見られた warn のうち、意図的に混入させた異常データに由来するものを確認します。代表例として `operational_monitoring` を見てみましょう。
 
 ```bash
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT issue_type, detail, metric_value, severity
 FROM analytics_dbt_test__audit.operational_monitoring;
 "
@@ -403,7 +474,7 @@ FROM analytics_dbt_test__audit.operational_monitoring;
 同じ warn のうち、統計的な異常検知として発火するものも確認しておきます。`seasonal_business_patterns` は月次売上の Z スコアで季節性の異常を検知するテストです。
 
 ```bash
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT current_month, current_sales, avg_monthly_sales, round(z_score, 2) AS z_score, anomaly_type
 FROM analytics_dbt_test__audit.seasonal_business_patterns;
 "
@@ -430,7 +501,7 @@ ZakkaMall はこの月に毎年夏のセールを実施しており、過去 2 �
 **重複内容の確認**: 以下の SQL を実行します。
 
 ```bash
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 SELECT product_name, category_id, count(*), array_agg(product_id)
 FROM analytics_staging.stg_zakka_mall__products
 GROUP BY 1, 2 HAVING count(*) > 1;
@@ -452,9 +523,9 @@ GROUP BY 1, 2 HAVING count(*) > 1;
 - **アプローチ A: ソース側の修正** — `zakka_mall.product` テーブルから重複の片方を削除する。マスタデータの正規化として最も健全
 
 ```bash
-# init-scripts 配下のシード SQL を編集して product_id=11（重複側）を削除するか、
+# duckdb-init 配下のシード SQL を編集して product_id=11（重複側）を削除するか、
 # 既に起動している DB に対して直接削除する
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "
+duckdb dbt_demo.duckdb -c "
 DELETE FROM zakka_mall.product WHERE product_id = 11;
 "
 ```
@@ -530,8 +601,9 @@ dbt build
 # ドキュメント生成
 dbt docs generate
 
-# ドキュメントサーバー起動（http://localhost:7072)
-dbt docs serve --host 0.0.0.0 --port 7072 --no-browser
+# ドキュメントサーバー起動（http://localhost:7072）
+# v1 の --no-browser は v2 では --no-open（v2 の既定ポートは 8580）
+dbt docs serve --host 0.0.0.0 --port 7072 --no-open
 
 # Exposures の確認
 # http://localhost:7072 の右下パネル「Exposures」で 6 件（exposures.yml の 5 件 + exposures_from_lightdash.yml の 1 件）を確認
@@ -539,141 +611,41 @@ dbt docs serve --host 0.0.0.0 --port 7072 --no-browser
 
 ## SQL の lint（オプション）
 
-本プロジェクトには [SQLFluff](https://docs.sqlfluff.com/) の設定（`.sqlfluff`）が含まれており、`pyproject.toml` の依存にも `sqlfluff-templater-dbt` が入っています。dbt テンプレート（`ref()` や `config()`）を解決してから lint するため、実行前に `dbt deps` を済ませておいてください。
+dbt v2 には SQLFluff 互換のリンタとフォーマッタが内蔵されています。設定は従来どおり `.sqlfluff` を読むため（本プロジェクトでは `dialect = duckdb`）、追加のインストールは不要です。dbt テンプレート（`ref()` や `config()`）を解決してから lint するため、実行前に `dbt deps` を済ませておいてください。
 
 ```bash
-# lint（models / snapshots / tests / macros を対象にする）
-sqlfluff lint models/ snapshots/ tests/ macros/
+# lint（models / snapshots / tests / macros / seeds を対象にする）
+dbt lint
 
-# 自動修正
-sqlfluff fix models/ snapshots/ tests/ macros/
+# 自動整形
+dbt format
 ```
 
+初期状態では 1 件の error（`stg_zakka_mall__products.sql` の `else null` / ST01）と 7 件の warning（RF02 / RF04 / ST06）が報告されます。`dbt format` を実行すると `tests/advanced_business_rules.sql` と `tests/seasonal_business_patterns.sql` の `case` / `where` のインデントが本文の掲載形から変わるため、そのまま実行せずに差分を確認してください。
+
 > [!NOTE]
-> 本ハンズオンのモデルとテストは lint をすべて通す状態にはしていません。第5章は singular data test やカスタムマクロが多く、そのうちいくつかは本文にコード例として掲載しているため、`sqlfluff fix` を実行すると本文と字面が変わってしまいます。たとえば `tests/operations/advanced_anomaly_detection.sql` のインデント（LT02）は本文の掲載形に揃えたものです。`tests/anomaly_orders_during_night_hours.sql` の `total_count` を修飾しない参照（RF02）はサブクエリの読みやすさを優先した書き方、`stg_zakka_mall__products.sql` の `else null`（ST01）は分岐の意図を明示するために残しています。`tests/advanced_business_rules.sql` の `case` 式のインデント（LT02）と `tests/seasonal_business_patterns.sql` の `year` / `month` というカラム名（RF04）も同様に、可読性と本文の掲載形を優先して残したものです。lint 設定は実務プロジェクトでの使い方を示すサンプルとして同梱しており、`.sqlfluff` の `exclude_rules` に自分のチームの方針を追記して使ってください。
+> 本ハンズオンのモデルとテストは lint をすべて通す状態にはしていません。第5章は singular data test やカスタムマクロが多く、そのうちいくつかは本文にコード例として掲載しているため、`dbt format` や `dbt lint --fix` を実行すると本文と字面が変わってしまいます。たとえば `tests/operations/advanced_anomaly_detection.sql` のインデント（LT02）は本文の掲載形に揃えたものです。`tests/anomaly_orders_during_night_hours.sql` の `total_count` を修飾しない参照（RF02）はサブクエリの読みやすさを優先した書き方、`stg_zakka_mall__products.sql` の `else null`（ST01）は分岐の意図を明示するために残しています。`tests/advanced_business_rules.sql` の `case` 式のインデント（LT02）と `tests/seasonal_business_patterns.sql` の `year` / `month` というカラム名（RF04）も同様に、可読性と本文の掲載形を優先して残したものです。lint 設定は実務プロジェクトでの使い方を示すサンプルとして同梱しており、`.sqlfluff` の `exclude_rules` に自分のチームの方針を追記して使ってください。
 
 ---
 
 ## [Advanced] Lightdash を利用した BI ダッシュボードによる可視化
 
-Lightdash を使用することで、dbt モデルを BI ダッシュボードとして可視化し、チーム間でのデータ品質情報共有を強化できます（シナリオ4）。
+書籍本文ではこの節で Lightdash（BI ツール）を起動し、dbt モデルをダッシュボードとして可視化します（シナリオ4）。**dbt v2 + DuckDB 版では Lightdash の実演は行いません。**
 
-執筆時点では Lightdash v0.2853.1 で動作確認を行っています。それ以降のバージョンでも基本的に同じ手順で動作する想定ですが、Lightdash は活発に更新されているため、UI の文言・メニュー位置・CLI のフラグ名などが変更されている可能性があります。手順どおりに進めたい場合は、次の手順で示すようにリポジトリと CLI の両方をこのバージョンに固定してください。動作しない箇所は [Lightdash 公式ドキュメント](https://docs.lightdash.com/) の最新版を参照してください。
+> [!IMPORTANT]
+> Lightdash が対応する DuckDB は **MotherDuck（クラウド）** と **DuckLake（カタログ + オブジェクトストレージ）** の 2 モードだけで、ローカルの単一ファイル（`dbt_demo.duckdb`）に接続する構成がありません。加えて Lightdash 本体は Docker コンテナで動くためファイルパスの共有が必要で、DuckDB の「1 プロセスしか書き込めない」制約とも衝突します。Lightdash の実機手順を試したい場合は、v1（dbt Core + PostgreSQL）版のハンズオン資材を使ってください。
 
-### 1. Docker コンテナの起動
+代わりに、**Lightdash からダウンロード済みのダッシュボード定義を使って dbt Exposure を生成する手順**を実行します。`lightdash/` ディレクトリに Lightdash の `download` 結果（チャート 3 件 + ダッシュボード 1 件の YAML）をコミットしてあるため、Lightdash を起動しなくても以降の手順はそのまま動きます。
 
-事前に用意されている [docker compose](https://docs.lightdash.com/self-host/self-host-lightdash-docker-compose) を利用します。
-
-```bash
-# Lightdash リポジトリをクローン
-git clone https://github.com/lightdash/lightdash
-cd lightdash
-
-# 動作確認済みのバージョンに合わせる（タグ名に v は付かない）
-git checkout 0.2853.1
+```text
+dbt_project/lightdash/
+├── charts/                          # チャート定義（Lightdash download の出力）
+├── dashboards/
+│   └── dbt-book-demo-dashboard.yml  # ダッシュボード定義
+└── shared.space.yml
 ```
 
-`git clone` した直後はデフォルトブランチ（`main`）を指しており、`docker-compose.yml` や `.env` の項目が本手順と異なる可能性があります。上記のタグに切り替えてから進めると、次に示す `.env` の編集内容がそのまま当てはまります。最新版で試したい場合は `git checkout` を省略してかまいませんが、UI やファイル構成の差異は各自で読み替えてください。
-
-切り替わったバージョンは次のコマンドで確認できます。
-
-```bash
-git describe --tags
-```
-
-dbt プロジェクトで起動している pgAdmin と衝突するので、`.env` ファイルをエディタで開いて port 8080 を変更します。また、ハンズオンの `dbt_project` ディレクトリを指定します。
-
-```diff
-# pgAdmin と衝突するためポートを変更
--PORT=8080
-+PORT=8081
-
--SITE_URL=http://localhost:8080
-+SITE_URL=http://localhost:8081
-
--DBT_PROJECT_DIR=.
-+DBT_PROJECT_DIR=<path-to-chapter5-handson>/dbt_project  # 実際のパスに変更
-```
-
-docker compose でコンテナを起動します。
-
-```bash
-docker compose -f docker-compose.yml --env-file .env up --detach --remove-orphans
-```
-
-### 2. Lightdash 事前準備
-
-以下にアクセスして任意のユーザー情報でサインアップを行います。
-
-```
-http://localhost:8081
-```
-
-データソースは **PostgreSQL** を選択し、**Using your CLI** を選択します。
-
-画面のガイドに沿って [lightdash CLI](https://docs.lightdash.com/guides/cli/how-to-install-the-lightdash-cli) をインストールします。CLI はサーバーと同じバージョンを指定しておくと、`lightdash generate` などの挙動が揃います。
-
-```bash
-# サーバー（0.2853.1）と同じバージョンの CLI を入れる
-npm install -g @lightdash/cli@0.2853.1
-
-# バージョンの確認
-lightdash --version
-```
-
-CLI で lightdash にログインします。
-
-```bash
-lightdash login http://localhost:8081 --token <token>
-```
-
-### 3. dbt モデルの準備 (optional)
-
-ハンズオンでは既に定義されていますが、`lightdash generate` を利用して各モデルの [dimension](https://docs.lightdash.com/references/dimensions) を YAML ファイル上の `models` に追加することが可能です。[metrics](https://docs.lightdash.com/references/metrics) については手動で登録を行います。ハンズオンでは `marts` レイヤーと `quality` レイヤーのみ Lightdash へ連携するようにします。
-
-```bash
-lightdash generate --select "fqn:zakkamall_data_quality.quality fqn:zakkamall_data_quality.marts"
-```
-
-### 4. dbt モデルを Lightdash にデプロイ
-
-Lightdash にプロジェクトを作成しつつデプロイします。yaml の `models` 修正後に再度デプロイする場合は `--create` オプションを外すことで同一プロジェクトの更新となります。
-
-```bash
-lightdash deploy --select "fqn:zakkamall_data_quality.quality fqn:zakkamall_data_quality.marts" --create dbt_book_chapter5_demo
-```
-
-### 5. プロジェクトのコネクション情報の修正
-
-Lightdash の docker コンテナから dbt プロジェクトの PostgreSQL を参照する際に `localhost` は使えないため、以下の手順で設定を変更します。
-
-1. 右上のユーザーアイコンをクリック
-2. **User settings** → **Current project** → **Connection settings** へ移動
-3. **Warehouse connection** の **Host** を `localhost` から `host.docker.internal` に変更
-
-参考: [Docker Desktop Networking](https://docs.docker.com/desktop/features/networking/#i-want-to-connect-from-a-container-to-a-service-on-the-host)
-
-### 6. ダッシュボードの作成
-
-**New** → **Query using SQL runner** から `marts` と `quality` レイヤーのテーブルを参照できます。
-
-### 7. Dashboard as code
-
-#### ダッシュボードのダウンロード
-
-作成したダッシュボードを YAML ファイルとしてダウンロードできます。
-
-```bash
-lightdash download --path ./lightdash
-```
-
-#### (Optional) ダッシュボードのインポート
-
-ダウンロードした YAML ファイルのダッシュボードのインポートも可能です。
-
-```bash
-lightdash upload lightdash/dashboards/dbt-book-demo-dashboard.yml --force
-```
+「BI ツール側の利用実態を dbt の Exposure としてコード化する」という本節の学習目標は、次の 2 つの手順で確認できます。
 
 #### ダウンロードしたダッシュボードから dbt Exposure を生成
 
@@ -689,7 +661,7 @@ python utils/generate_exposures_from_lightdash.py --lightdash-dir lightdash
 
 ```bash
 dbt docs generate
-dbt docs serve --host 0.0.0.0 --port 7072 --no-browser
+dbt docs serve
 # http://localhost:7072 の右下パネル「Exposures」で確認
 ```
 
@@ -725,20 +697,6 @@ python utils/sql_parser.py target/compiled/zakkamall_data_quality/models/marts/d
 
 本文シナリオ4では「BI ツールが発行する SQL を静的解析して `depends_on` を割り出す」アプローチを紹介しました。`sql_parser.py` はその考え方を小さく試せる形にしたものです。Lightdash では構造化フィールドから直接生成できますが、SQL しか得られない BI ツールでは、この抽出処理が依存関係の割り出しに役立ちます。
 
-### 8. Lightdash 環境の片付け
-
-Lightdash を試し終えたら、コンテナを停止します。Lightdash はハンズオン資材とは別の Docker 環境（Lightdash 公式の `docker-compose.yml`）で動いているため、この節の中で起動から停止まで完結させます。
-
-```bash
-# lightdash リポジトリをクローンしたディレクトリで実行
-docker compose -f docker-compose.yml --env-file .env down
-
-# データも削除して初期状態に戻す場合
-docker compose -f docker-compose.yml --env-file .env down -v
-```
-
-ch5 のハンズオン環境（`dbt_zakka_mall` / `dbt_pgadmin`）は別の compose で管理しているため、この操作では停止しません。そちらの片付けは「クリーンアップ」節を参照してください。
-
 ---
 
 ## クリーンアップ
@@ -770,20 +728,18 @@ dbt clean
 deactivate
 ```
 
-### コンテナを停止
+`.venv/` ごと削除する場合は `rm -rf .venv` を実行します。再開時は `uv sync --frozen` で作り直せます。
+
+### データベースファイルを削除
 
 ```bash
-# コンテナを停止（データは保持される）
-docker compose down
-
-# データも削除して初期状態に戻す
-docker compose down -v
+# dbt_project ディレクトリで実行
+rm dbt_demo.duckdb
 ```
 
-> [!NOTE]
-> `-v` を付けるとボリューム（`handson_dbt_ch5_postgres_data`）が削除され、次回の `docker compose up -d` で `init-scripts/` が再実行されて初期データから作り直されます。ケーススタディでサンプルデータや SQL を書き換えたあとにやり直したい場合はこちらを使ってください。
+データベースは 1 ファイルなので、削除すれば初期状態に戻ります。ケーススタディでサンプルデータを書き換えたあとにやり直したい場合は、削除してから環境構築の手順 1（`cat duckdb-init/*.sql | duckdb dbt_project/dbt_demo.duckdb`）を実行してください。
 
-なお第4章・付録Aのハンズオンも同じコンテナ名（`dbt_zakka_mall`）とポート（5432）を使います。ボリュームは章ごとに分かれているため、章を切り替えるときは対象外の章のディレクトリで `docker compose down`（`-v` は付けない）を実行してから、対象の章で `docker compose up -d` してください。
+第4章・付録A もそれぞれの章のディレクトリにデータベースファイルを作るため、章を切り替えるときに片付ける必要はありません。
 
 ---
 
@@ -791,13 +747,23 @@ docker compose down -v
 
 ### `dbt debug` が接続に失敗する
 
-まずコンテナの状態を確認します。
+`profiles.yml` の `path: dbt_demo.duckdb` は**カレントディレクトリからの相対パス**です。`dbt_project` ディレクトリで実行しているか確認してください。別のディレクトリから実行すると、存在しないファイルを新規作成して「テーブルが無い」状態になります。
 
-```bash
-docker compose ps
-```
+### `Could not set lock on file ... Conflicting lock is held` で失敗する
 
-`dbt_zakka_mall` が healthy になっていない場合は、初期化スクリプトの実行中か、ポート 5432 が他のプロセスと衝突しています。第4章・付録Aのハンズオンも同じコンテナ名とポートを使うため、それらが起動している場合は対象外の章のディレクトリで `docker compose down` を実行してから起動し直してください。
+DuckDB は 1 プロセスしか書き込めません。次のどれかが開いたままになっていないか確認してください。
+
+- 対話モードの `duckdb dbt_demo.duckdb` セッション（`.quit` で抜ける）
+- 別ターミナルで動いている `dbt` / `edr` / `dbt-osmosis`
+- エディタの dbt 拡張が起動した LSP（`dbt lsp` プロセス）。VS Code などを開いたまま CLI を実行すると衝突します
+
+### `edr report` が `schema "analytics_elementary" does not exist` で失敗する
+
+`CH5_DUCKDB_PATH` が未設定です。`export CH5_DUCKDB_PATH="$(pwd)/dbt_demo.duckdb"`（`dbt_project` ディレクトリで実行）を設定してから再実行してください。詳細は「環境構築」の手順 2 を参照してください。
+
+### `edr` が「incompatible versions」を警告する
+
+`pyproject.toml` の `elementary-data` と `packages.yml` の `elementary`（dbt パッケージ）のバージョンを揃えてください。本ハンズオンでは dbt パッケージ 0.25.0 に合わせて `elementary-data>=0.25.0,<0.26.0` を指定しています。
 
 ### `dbt deps` で「Updates available」と表示される
 
@@ -849,7 +815,11 @@ data_tests:
 `+store_failures: true` を設定しているため、失敗したテストの行が `analytics_dbt_test__audit` スキーマのテーブルに保存されます。失敗した理由を SQL で直接調べられるため、原因究明が速くなります。
 
 ```bash
-docker exec dbt_zakka_mall psql -U dbt_user -d dbt_demo -c "\dt analytics_dbt_test__audit.*"
+duckdb dbt_demo.duckdb -c "
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'analytics_dbt_test__audit'
+ORDER BY table_name;
+"
 ```
 
 保存形式は `store_failures_as` で切り替えられます（`table` / `view` / `ephemeral`）。既定は `table` で、`view` にすると実行のたびに最新の失敗行を参照でき、ストレージも消費しません。
@@ -881,21 +851,22 @@ dbt test --select state:modified+ --defer --state target/
 
 ```
 .
-├── compose.yml                                      # PostgreSQL 17 + pgAdmin の定義
-├── pg-config.json                                   # pgAdmin の接続先事前登録
 ├── README.md                                        # 本ファイル
-├── init-scripts/                                    # データベース初期化スクリプト (コンテナ初回起動時に番号順で実行)
+├── dbt_v2_migration_plan.md                         # dbt v2 + DuckDB への移行計画と実施記録
+├── duckdb-init/                                     # DuckDB 初期化スクリプト (番号順に流し込む)
 │   ├── 01_ddl.sql                                   # zakka_mall スキーマとテーブル定義
 │   ├── 02_master_data.sql                           # 顧客・商品・カテゴリのマスタデータ
 │   ├── 03_transaction_data.sql                      # 注文・明細・支払いのトランザクションデータ
 │   └── 04_quality_issues_data.sql                   # 意図的な品質問題を含むデータ (演習の題材)
 └── dbt_project/
-    ├── dbt_project.yml                              # dbt プロジェクト設定
-    ├── profiles.yml                                 # 接続設定
+    ├── dbt_project.yml                              # dbt プロジェクト設定 (flags / dispatch / vars)
+    ├── profiles.yml                                 # 接続設定 (duckdb。elementary プロファイルは絶対パス)
     ├── packages.yml                                 # パッケージ定義
     ├── package-lock.yml
-    ├── pyproject.toml
+    ├── pyproject.toml                               # edr / dbt-osmosis / sqlglot (モデルのビルドには使わない)
     ├── uv.lock
+    ├── .sqlfluff                                    # dbt lint / dbt format の設定 (dialect = duckdb)
+    ├── dbt_demo.duckdb                              # DuckDB データベース (duckdb-init から生成、Git 管理外)
     │
     ├── models/                                      # dbt モデル
     │   ├── staging/                                 # stagingレイヤー (source と 1:1 対応)
@@ -929,6 +900,7 @@ dbt test --select state:modified+ --defer --state target/
     │   └── exposures_from_lightdash.yml             # Lightdash ダッシュボード定義から自動生成された Exposures
     │
     ├── macros/                                      # dbt マクロ
+    │   ├── elementary_duckdb_fusion.sql             # Elementary を dbt v2 + DuckDB で動かす互換マクロ
     │   ├── quality_framework.sql                    # DMBOK2 品質評価マクロ (completeness/uniqueness/validity/consistency)
     │   ├── quality_framework.yml                    # quality_framework マクロの description
     │   ├── anomaly_detection_helpers.sql            # 異常検知補助マクロ (Z-score 外れ値検出・鮮度チェック等)
@@ -1030,6 +1002,15 @@ Quality レイヤーが Marts ではなく Staging を直接参照している�
 ## 付録: データベース設計
 
 ZakkaMall の OLTP データベーススキーマの詳細です。ハンズオンを進めるうえで必須ではありませんが、モデルの実装やテストの意図を確認したいときに参照してください。
+
+> [!NOTE]
+> 以下の DDL 表記は書籍本文（PostgreSQL）に合わせています。DuckDB 版（`duckdb-init/01_ddl.sql`）では次の 3 点が異なります。設計上の意図は同じですが、DuckDB に該当機能が無い、あるいは演習の妨げになるためです。
+>
+> | 本文（PostgreSQL） | DuckDB 版 |
+> | --- | --- |
+> | `BIGINT GENERATED ALWAYS AS IDENTITY` | `CREATE SEQUENCE` + `DEFAULT nextval(...)` |
+> | `FOREIGN KEY`（6 箇所） | 付けていない（DuckDB は参照されている親行を UPDATE / DELETE できず、ケーススタディ C の重複行削除が実行できなくなるため） |
+> | `CREATE INDEX`（12 本） | 付けていない（列指向のため不要） |
 
 ### エンティティ関係図
 
@@ -1213,7 +1194,7 @@ erDiagram
 **品質問題**:
 - 負の数量・ゼロ数量・負の単価（シナリオ2: `dbt_expectations` の範囲テストおよび `quality_assessment` の妥当性チェックで検出）
 - 単価が商品マスタの現時点価格と一致しない（販売時点の価格を保持する設計のため多くの明細が該当する。`dim_products` の利益計算で「販売時点単価 × 現時点原価」を扱う題材になる）
-- 注文ヘッダーの `total_amount` と明細合計が合わない注文が 2 件ある（`init-scripts/03_transaction_data.sql` の「データ不整合」節で意図的に投入）
+- 注文ヘッダーの `total_amount` と明細合計が合わない注文が 2 件ある（`duckdb-init/03_transaction_data.sql` の「データ不整合」節で意図的に投入）
 
 `line_total` が `quantity * unit_price` と一致するかを検証する singular data test `business_rule_order_detail_line_total_consistency` も用意していますが、現在のサンプルデータに違反行は含めていないため PASS します。検出される様子を試したい場合は、`order_detail` の任意の行の `line_total` を書き換えてから `dbt test --select business_rule_order_detail_line_total_consistency` を実行してください。
 

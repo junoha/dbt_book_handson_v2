@@ -3,8 +3,9 @@ models:
   - name: stg_zakka_mall__customers
     description: 顧客データのステージングモデル
     config:
-      elementary:
-        timestamp_column: registration_date
+      meta:
+        elementary:
+          timestamp_column: registration_date
     data_tests:
       # Elementary 異常検知テスト
       - elementary.volume_anomalies:
@@ -304,8 +305,9 @@ models:
   - name: stg_zakka_mall__orders
     description: 注文データのステージングモデル
     config:
-      elementary:
-        timestamp_column: order_date
+      meta:
+        elementary:
+          timestamp_column: order_date
     data_tests:
       # Elementary 異常検知テスト
       - elementary.volume_anomalies:
@@ -485,8 +487,9 @@ models:
   - name: stg_zakka_mall__payments
     description: 支払いデータのステージングモデル
     config:
-      elementary:
-        timestamp_column: payment_date
+      meta:
+        elementary:
+          timestamp_column: payment_date
     data_tests:
       # Elementary 異常検知テスト
       # 運用段階の異常検知は「検知はするが build は止めない」方針とし、

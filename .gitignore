@@ -1,0 +1,12 @@
+target/
+logs/
+dbt_packages/
+dbt_internal_packages/
+edr_target/
+.venv/
+.user.yml
+.lightdash-metadata.json
+*.duckdb
+*.duckdb.wal
+
+dbt_v2_migration_plan.md

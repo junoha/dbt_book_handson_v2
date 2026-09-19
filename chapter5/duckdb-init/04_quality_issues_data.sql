@@ -1,4 +1,10 @@
 /*
+v1 版（PostgreSQL）の init-scripts/04_quality_issues_data.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 1 点のみ。
+  - search_path の指定を SET search_path に置き換え、SET TimeZone = 'UTC' を追加
+    （PostgreSQL コンテナと同じ解釈で CURRENT_DATE 相対のデータを取り込むため）
+*/
+/*
 データ品質問題のサンプルデータ追加投入
 異常検知やデータ品質テストのデモンストレーション用
 
@@ -13,7 +19,8 @@ ZakkaMall の商品・顧客として自然な名前を使い、問題の所在�
   order    : 03 で 12 件投入済みのため 13 から
 */
 
-SELECT pg_catalog.set_config('search_path', 'zakka_mall, pg_catalog', false);
+SET search_path = 'zakka_mall';
+SET TimeZone = 'UTC';
 
 -- ============================================================
 -- マスタデータの追加
