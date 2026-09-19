@@ -21,7 +21,7 @@
 
 | | dbt v1 + PostgreSQL 版 | このプロジェクト |
 | --- | --- | --- |
-| dbt | dbt-core 1.11（Python） | dbt 2.0.4（Rust、単一バイナリ） |
+| dbt | dbt-core 1.11（Python） | dbt 2.0.x（Rust、単一バイナリ） |
 | データプラットフォーム | PostgreSQL 17（Docker） | DuckDB（ローカルファイル 1 つ） |
 | 必要なもの | Docker、uv、Python | dbt、DuckDB CLI、uv（`mf` 用） |
 | Python 仮想環境 | 必要（dbt 本体 + mf） | 必要（**`mf` のみ**。dbt 本体はバイナリ） |
@@ -54,7 +54,7 @@
 
 本ハンズオンでは AWS リソースも Docker も使いません。第4章の基本概念を理解していることを前提とします。
 
-検証済みバージョンは dbt 2.0.4 / DuckDB 1.5.5 / dbt-metricflow 0.15.0 です。`mf` は self-hosted 構成ではバージョン整合を利用者側で管理する必要があるため、うまく動かないときはまずこの組み合わせを試してください。
+検証済みバージョンは dbt 2.0.x（2.0.4 / 2.0.5）/ DuckDB 1.5.5 / dbt-metricflow 0.15.0 です。`mf` は self-hosted 構成ではバージョン整合を利用者側で管理する必要があるため、うまく動かないときはまずこの組み合わせを試してください。
 
 ### dbt v2
 
@@ -71,7 +71,7 @@ irm https://public.cdn.getdbt.com/fs/install/install.ps1 | iex
 ```
 
 ```bash
-dbt --version   # 2.0.4 以上であること
+dbt --version   # 2.0.x であること
 ```
 
 ### DuckDB CLI

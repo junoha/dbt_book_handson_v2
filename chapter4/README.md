@@ -25,7 +25,7 @@
 
 | | dbt v1 + PostgreSQL 版 | このプロジェクト |
 | --- | --- | --- |
-| dbt | dbt-core 1.11（Python） | dbt 2.0.4（Rust、単一バイナリ） |
+| dbt | dbt-core 1.11（Python） | dbt 2.0.x（Rust、単一バイナリ） |
 | データプラットフォーム | PostgreSQL 17（Docker） | DuckDB（ローカルファイル 1 つ） |
 | 必要なもの | Docker、uv、Python | dbt、DuckDB CLI |
 | Python 仮想環境 | 必要（`uv sync`） | 不要 |
@@ -61,7 +61,7 @@ irm https://public.cdn.getdbt.com/fs/install/install.ps1 | iex
 ```
 
 ```bash
-dbt --version   # 2.0.4 以上であること
+dbt --version   # 2.0.x であること
 ```
 
 ### DuckDB CLI
