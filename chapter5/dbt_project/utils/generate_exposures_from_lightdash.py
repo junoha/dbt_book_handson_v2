@@ -104,11 +104,14 @@ def generate_exposure_from_dashboard(
         "description": description,
         "depends_on": depends_on,
         "owner": {"name": "データチーム", "email": "data-team@zakkamall.example.com"},
-        "meta": {
-            "business_impact": "high",
-            "refresh_schedule": "daily",
-            "source": "lightdash",
-            "chart_count": len(chart_slugs),
+        # dbt v2 では meta を config 配下に置く（トップレベルの meta は解釈されない）
+        "config": {
+            "meta": {
+                "business_impact": "high",
+                "refresh_schedule": "daily",
+                "source": "lightdash",
+                "chart_count": len(chart_slugs),
+            },
         },
     }
 

@@ -1,4 +1,10 @@
 /*
+v1 版（PostgreSQL）の init-scripts/03_transaction_data.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 1 点のみ。
+  - search_path の指定を SET search_path に置き換え、SET TimeZone = 'UTC' を追加
+    （PostgreSQL コンテナと同じ解釈で CURRENT_DATE 相対のデータを取り込むため）
+*/
+/*
 トランザクションデータの投入 - 第5章データ品質管理用
 
 日付はすべて CURRENT_DATE 相対で指定する。読者がいつ環境を構築しても、
@@ -9,7 +15,8 @@ created_at / updated_at には明示的な時刻を持たせる。省略する�
 実行時刻に依存してしまう。
 */
 
-SELECT pg_catalog.set_config('search_path', 'zakka_mall, pg_catalog', false);
+SET search_path = 'zakka_mall';
+SET TimeZone = 'UTC';
 
 -- 注文データ（品質問題を含む）
 -- 月次トレンド分析（tests/seasonal_business_patterns.sql）は同じ月を複数年で比較するため、

@@ -55,10 +55,10 @@ macros:
         type: string
         description: 数値カラム名
       - name: min_value
-        type: number
+        type: float
         description: 最小値
       - name: max_value
-        type: number
+        type: float
         description: 最大値
 
   - name: test_test_multi_column_relationships
@@ -130,7 +130,7 @@ macros:
         type: string
         description: 数値カラム名
       - name: z_score_threshold
-        type: number
+        type: float
         description: "Z-score 閾値（デフォルト: 3）"
 
   - name: test_test_business_days_only
@@ -194,10 +194,10 @@ macros:
         type: string
         description: 金額カラム名
       - name: min_value
-        type: number
+        type: float
         description: "最小値（デフォルト: 0）"
       - name: max_value
-        type: number
+        type: float
         description: "最大値（デフォルト: 10000000）"
 
   - name: test_expect_email_domain_not_in_denylist

@@ -13,8 +13,9 @@ exposures:
   owner:
     name: データチーム
     email: data-team@zakkamall.example.com
-  meta:
-    business_impact: high
-    refresh_schedule: daily
-    source: lightdash
-    chart_count: 3
+  config:
+    meta:
+      business_impact: high
+      refresh_schedule: daily
+      source: lightdash
+      chart_count: 3

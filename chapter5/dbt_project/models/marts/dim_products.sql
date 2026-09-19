@@ -29,7 +29,9 @@ product_sales as (
     -- 巻き戻って再計算されないよう、売上・利益ともに order_details.unit_price を基準にする。
     select
         od.product_id,
-        sum(od.quantity) as total_sold_quantity,
+        -- DuckDB の sum(integer) は decimal(38, 0) を返すため、
+        -- contract の data_type (bigint) に合わせて明示的にキャストする
+        sum(od.quantity)::bigint as total_sold_quantity,
         sum(od.line_total)::numeric(15, 2) as total_revenue,
         count(distinct o.order_id) as total_orders,
         sum(

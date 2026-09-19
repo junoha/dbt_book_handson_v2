@@ -1,15 +1,10 @@
+# templater = dbt は残す（v2 が対応するのは dbt テンプレータのみで、省略すると jinja 扱いで警告になる）。
 [sqlfluff]
 templater = dbt
-dialect = postgres
+dialect = duckdb
 sql_file_exts = .sql
 max_line_length = 100
 exclude_rules = LT05, L036
-
-[sqlfluff:templater:dbt]
-project_dir = .
-profiles_dir = .
-profile = dbt_book_ch5_data_quality_project
-target = dev
 
 [sqlfluff:indentation]
 indented_joins = False

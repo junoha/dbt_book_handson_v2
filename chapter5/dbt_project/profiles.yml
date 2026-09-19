@@ -2,39 +2,27 @@ dbt_book_ch5_data_quality_project:
   target: dev
   outputs:
     dev:
-      type: postgres
-      host: localhost
-      port: 5432
-      user: dbt_user
-      password: dbt_password
-      dbname: dbt_demo
+      type: duckdb
+      # DuckDB はファイル名がカタログ名になる。ソース定義が dbt_demo を指しているため
+      # ファイル名は dbt_demo.duckdb にしている。
+      path: dbt_demo.duckdb
       schema: analytics
       threads: 4
-      keepalives_idle: 0
-      search_path: "analytics,zakka_mall"
-      sslmode: disable
 
     prod:
-      type: postgres
-      host: "{{ env_var('DBT_HOST') }}"
-      user: "{{ env_var('DBT_USER') }}"
-      password: "{{ env_var('DBT_PASSWORD') }}"
-      port: "{{ env_var('DBT_PORT', 5432) }}"
-      dbname: "{{ env_var('DBT_DATABASE', 'dbt_demo') }}"
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'dbt_demo.duckdb') }}"
       schema: "{{ env_var('DBT_SCHEMA', 'analytics') }}"
       threads: 4
-      keepalives_idle: 0
-      search_path: "analytics,zakka_mall"
-      sslmode: disable
 
+# Elementary（edr）用のプロファイル。
+# edr は自身の内部 dbt プロジェクト（site-packages 配下）を --project-dir にして dbt を呼ぶため、
+# path を相対パスにすると別の場所に空のデータベースを作ってしまう。絶対パスを環境変数で渡す。
+#   export CH5_DUCKDB_PATH="$(pwd)/dbt_demo.duckdb"
 elementary:
   outputs:
     default:
-      type: postgres
-      host: localhost
-      port: 5432
-      user: dbt_user
-      password: dbt_password
-      dbname: dbt_demo
+      type: duckdb
+      path: "{{ env_var('CH5_DUCKDB_PATH', 'dbt_demo.duckdb') }}"
       schema: analytics_elementary
       threads: 4

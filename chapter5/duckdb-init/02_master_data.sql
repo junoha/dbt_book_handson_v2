@@ -1,8 +1,15 @@
 /*
+v1 版（PostgreSQL）の init-scripts/02_master_data.sql から生成した DuckDB 版。
+PostgreSQL 版との違いは次の 1 点のみ。
+  - search_path の指定を SET search_path に置き換え、SET TimeZone = 'UTC' を追加
+    （PostgreSQL コンテナと同じ解釈で CURRENT_DATE 相対のデータを取り込むため）
+*/
+/*
 マスタデータの投入 - 第5章データ品質管理用
 */
 
-SELECT pg_catalog.set_config('search_path', 'zakka_mall, pg_catalog', false);
+SET search_path = 'zakka_mall';
+SET TimeZone = 'UTC';
 
 -- 商品カテゴリデータ
 INSERT INTO product_category (category_name, parent_category_id) VALUES

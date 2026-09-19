@@ -4,11 +4,15 @@ version = "0.1.0"
 description = "dbt hands-on chapter 5 - Data Quality Management"
 readme = "README.md"
 requires-python = ">=3.12"
+# dbt 本体（v2）は単一バイナリのためここには入れない。
+# この仮想環境は Elementary のレポート生成（edr）と dbt-osmosis、
+# utils/sql_parser.py のために用意している。
+# edr / dbt-osmosis は内部で Python 版 dbt（dbt-core + dbt-duckdb）を使うが、
+# モデルのビルドは v2 バイナリで行う。
 dependencies = [
-    "dbt-core>=1.11.8,<1.12.0",
-    "dbt-osmosis>=1.4.0",
-    "dbt-postgres>=1.10.0",
-    "elementary-data>=0.25.0",
-    "sqlfluff-templater-dbt>=4.2.0",
-    "sqlglot>=28,<29", # dbt-osmosis 1.4.0 の制約
+    # edr のバージョンは packages.yml の elementary（dbt パッケージ）と揃える。
+    # ずれると edr が "incompatible versions" を警告する。
+    "elementary-data[duckdb]>=0.25.0,<0.26.0",
+    "dbt-osmosis>=1.5.0",
+    "sqlglot>=28",
 ]
